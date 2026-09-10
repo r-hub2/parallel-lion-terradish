@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Bill Peterman" />
+
+
+<title>Simulating Covariance Data to Plan a Study</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Simulating Covariance Data to Plan a
+Study</h1>
+<h4 class="author">Bill Peterman</h4>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#why-simulate-before-you-sample" id="toc-why-simulate-before-you-sample"><span class="toc-section-number">1</span> Why simulate before you
+sample?</a></li>
+<li><a href="#the-generative-model" id="toc-the-generative-model"><span class="toc-section-number">2</span> The generative model</a></li>
+<li><a href="#set-up-a-landscape-template" id="toc-set-up-a-landscape-template"><span class="toc-section-number">3</span> Set up a landscape template</a></li>
+<li><a href="#a-single-simulated-data-set" id="toc-a-single-simulated-data-set"><span class="toc-section-number">4</span> A single simulated data set</a></li>
+<li><a href="#the-role-of-effective-nu-in-statistical-power" id="toc-the-role-of-effective-nu-in-statistical-power"><span class="toc-section-number">5</span> The role of effective
+<code>nu</code> in statistical power</a></li>
+<li><a href="#the-role-of-sample-size-in-statistical-power" id="toc-the-role-of-sample-size-in-statistical-power"><span class="toc-section-number">6</span> The role of sample size in
+statistical power</a></li>
+<li><a href="#comparing-sampling-strategies-and-candidate-models" id="toc-comparing-sampling-strategies-and-candidate-models"><span class="toc-section-number">7</span> Comparing sampling strategies and
+candidate models</a>
+<ul>
+<li><a href="#scenario-level-summary" id="toc-scenario-level-summary"><span class="toc-section-number">7.1</span> Scenario-level summary</a></li>
+<li><a href="#parameter-level-summary" id="toc-parameter-level-summary"><span class="toc-section-number">7.2</span> Parameter-level summary</a></li>
+</ul></li>
+<li><a href="#interpreting-and-acting-on-the-results" id="toc-interpreting-and-acting-on-the-results"><span class="toc-section-number">8</span> Interpreting and acting on the
+results</a></li>
+<li><a href="#quick-reference" id="toc-quick-reference"><span class="toc-section-number">9</span> Quick reference</a></li>
+<li><a href="#summary-of-key-functions" id="toc-summary-of-key-functions"><span class="toc-section-number">10</span> Summary of key functions</a></li>
+<li><a href="#see-also" id="toc-see-also"><span class="toc-section-number">11</span> See also</a></li>
+</ul>
+</div>
+
+<div id="why-simulate-before-you-sample" class="section level2" number="1">
+<h2><span class="header-section-number">1</span> Why simulate before you
+sample?</h2>
+<p>Landscape-genetic studies are expensive: every additional sampling
+site means field time and cost. Before committing to a design it is
+worth asking, in advance:</p>
+<ul>
+<li><strong>How many sampling sites</strong> do I need to detect the
+conditional conductance association specified in my scenario?</li>
+<li><strong>How much approximately independent marker
+information</strong> (represented by the supplied <code>nu</code>) do I
+need?</li>
+<li><strong>Where should the sites go</strong>: spread evenly across the
+landscape, or placed some other way?</li>
+<li>If I run the analysis, <strong>how often will I recover the
+generating parameters under this model</strong>, and how often will
+sampling variation obscure them?</li>
+</ul>
+<p><code>terradish</code> answers these questions by simulation. Because
+the Wishart covariance model has a tractable generative form, you can
+draw synthetic covariance matrices from a <em>known</em> conductance
+surface, refit the model, and measure how reliably the generating
+parameters are recovered, all without any forward-time genetic
+simulation. This vignette shows how.</p>
+<p>This is a <strong>design tool</strong>, not a replacement for
+individual-based or coalescent simulation. It assumes the fitted model
+is correctly specified and asks: given that model and this set of
+scenarios, how much data do I need? The answer is conditional on the
+graph, parameters, candidate set, likelihood, optimizer, and sampling
+strategies evaluated here.</p>
+<hr />
+</div>
+<div id="the-generative-model" class="section level2" number="2">
+<h2><span class="header-section-number">2</span> The generative
+model</h2>
+<p>A covariance-based <code>terradish</code> fit (see
+<code>vignette(&quot;wishart-covariance&quot;, package = &quot;terradish&quot;)</code>)
+assumes the observed genetic covariance matrix <code>S</code> is a noisy
+realization of a structured covariance:</p>
+<p><span class="math display">\[\Sigma = \tau \, E(\theta) + \sigma\, I,
+\qquad
+  \nu\, S \sim \mathrm{Wishart}(\nu, \Sigma)\]</span></p>
+<p>where:</p>
+<ul>
+<li><span class="math inline">\(E(\theta)\)</span> is the
+<strong>conductance-implied covariance</strong>: the generalized inverse
+of the graph Laplacian at conductance parameters <span class="math inline">\(\theta\)</span>. This is the part that carries the
+landscape signal.</li>
+<li><span class="math inline">\(\tau \ge 0\)</span> scales that
+signal.</li>
+<li><span class="math inline">\(\sigma \ge 0\)</span> is a diagonal
+residual-variance term for covariance variation not represented by <span class="math inline">\(E(\theta)\)</span>. It is not a direct estimate of
+drift, population size, or a Gaussian smoothing scale.</li>
+<li><span class="math inline">\(\nu\)</span> is the supplied
+<strong>effective Wishart degrees of freedom</strong>, not a fitted
+parameter. It can be interpreted as the effective number of
+approximately independent marker contributions. Large <span class="math inline">\(\nu\)</span> gives draws tightly clustered around
+<span class="math inline">\(\Sigma\)</span>; small <span class="math inline">\(\nu\)</span> gives noisier draws.</li>
+</ul>
+<p><code>simulate_covariance_response()</code> draws from exactly this
+model, and <code>covariance_response_power()</code> automates the
+simulate-refit-summarize loop across many designs. Fitted
+<code>wishart_covariance()</code> models store the nugget internally on
+the log scale, but both simulation helpers accept <span class="math inline">\(\sigma\)</span> as the nonnegative variance added
+to the diagonal.</p>
+<p>For a fixed landscape template, <span class="math inline">\(\tau /
+\sigma\)</span> is a convenient <strong>signal-to-nugget ratio</strong>.
+Larger values place more weight on the landscape-implied covariance
+relative to diagonal noise. The ratio should be interpreted within a
+fixed template because rescaling <span class="math inline">\(E(\theta)\)</span> also changes its meaning.</p>
+<blockquote>
+<p><strong>Keep <code>nu</code> front of mind.</strong> As explained in
+<code>vignette(&quot;wishart-covariance&quot;, package = &quot;terradish&quot;)</code>,
+<code>nu</code> acts as an <em>effective sample size</em>. It does not
+change the <em>point estimates</em> recovered from a given covariance
+matrix, but it controls their precision (standard errors scale as <span class="math inline">\(1/\sqrt{\nu}\)</span>) and therefore the
+<strong>statistical power</strong> to detect a nonzero coefficient under
+the simulated model. Sample size and marker design are important
+study-design levers, but the effective <code>nu</code> may be smaller
+than the raw marker count because of dependence. For microsatellites,
+use the locus count as the primary value and <span class="math inline">\(\sum_l(K_l-1)\)</span> only as a larger
+sensitivity value.</p>
+</blockquote>
+<hr />
+</div>
+<div id="set-up-a-landscape-template" class="section level2" number="3">
+<h2><span class="header-section-number">3</span> Set up a landscape
+template</h2>
+<p>We need a landscape to define the conductance surface. Any
+<code>conductance_surface()</code> works; here we reuse the bundled
+<em>Melipona</em> rasters as a realistic template. Build the surface
+with <code>saveStack = TRUE</code> so the simulation tools can subset
+focal sites efficiently.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(terra)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">data</span>(melip)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>melip.altitude    <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.altitude)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>melip.forestcover <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.forestcover)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>melip.coords      <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.coords)</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>covariates <span class="ot">&lt;-</span> <span class="fu">c</span>(melip.altitude, melip.forestcover)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="fu">names</span>(covariates) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;altitude&quot;</span>, <span class="st">&quot;forestcover&quot;</span>)</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>covariates <span class="ot">&lt;-</span> <span class="fu">scale_covariates</span>(covariates)</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covariates, melip.coords,</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>                               <span class="at">directions =</span> <span class="dv">8</span>, <span class="at">saveStack =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Candidate focal sites:&quot;</span>, <span class="fu">length</span>(surface<span class="sc">$</span>demes), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt; Candidate focal sites: 37</span></span></code></pre></div>
+<p>We also fix the <strong>generating parameters</strong> we want to
+recover: a moderate positive forest-cover coefficient and a moderate
+negative altitude coefficient for log conductance. These are
+illustrative simulation settings, not estimates from the bundled
+<em>Melipona</em> genetic response. The bundled rasters provide a
+realistic landscape template, while the synthetic covariance response is
+generated from the values below.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>theta_true <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">forestcover =</span> <span class="fl">0.6</span>, <span class="at">altitude =</span> <span class="sc">-</span><span class="fl">0.4</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>tau_true   <span class="ot">&lt;-</span> <span class="dv">2</span>   <span class="co"># strength of the landscape signal</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>sigma_true <span class="ot">&lt;-</span> <span class="dv">1</span>   <span class="co"># nugget (non-landscape variance)</span></span></code></pre></div>
+<hr />
+</div>
+<div id="a-single-simulated-data-set" class="section level2" number="4">
+<h2><span class="header-section-number">4</span> A single simulated data
+set</h2>
+<p><code>simulate_covariance_response()</code> returns one covariance
+matrix (plus the ingredients used to build it). This is precisely the
+object you would otherwise compute from real genotypes with
+<code>cov_from_genetic_data()</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">simulate_covariance_response</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="at">theta             =</span> theta_true,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="at">formula           =</span> <span class="sc">~</span> forestcover <span class="sc">+</span> altitude,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">data              =</span> surface,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">tau               =</span> tau_true,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="at">sigma             =</span> sigma_true,</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>  <span class="at">nu                =</span> <span class="dv">100</span>,     <span class="co"># 100 effective independent marker contributions</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>  <span class="at">seed              =</span> <span class="dv">1</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>)</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="fu">dim</span>(sim<span class="sc">$</span>covariance)        <span class="co"># one row/column per focal site</span></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co">#&gt; [1] 37 37</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="fu">round</span>(sim<span class="sc">$</span>covariance[<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>], <span class="dv">3</span>)</span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a><span class="co">#&gt;        [,1]   [,2]   [,3]   [,4]</span></span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a><span class="co">#&gt; [1,]  1.113  0.323 -0.288  0.044</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a><span class="co">#&gt; [2,]  0.323  1.562 -0.304 -0.053</span></span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a><span class="co">#&gt; [3,] -0.288 -0.304  1.947  0.267</span></span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="co">#&gt; [4,]  0.044 -0.053  0.267  1.245</span></span></code></pre></div>
+<p>Refitting estimates the parameters used to generate the data. One
+draw may depart substantially from the generating values:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  sim<span class="sc">$</span>covariance <span class="sc">~</span> forestcover <span class="sc">+</span> altitude,</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">data              =</span> surface,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">measurement_model =</span> wishart_covariance,</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">nu                =</span> <span class="dv">100</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>)</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="fu">rbind</span>(<span class="at">true      =</span> theta_true,</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a>      <span class="at">estimated =</span> <span class="fu">round</span>(<span class="fu">coef</span>(fit), <span class="dv">3</span>))</span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt;           forestcover altitude</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; true            0.600   -0.400</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; estimated       0.604   -0.447</span></span></code></pre></div>
+<p>A single replicate only tells you what happened <em>once</em>. To
+characterize a design you must repeat the draw many times.</p>
+<hr />
+</div>
+<div id="the-role-of-effective-nu-in-statistical-power" class="section level2" number="5">
+<h2><span class="header-section-number">5</span> The role of effective
+<code>nu</code> in statistical power</h2>
+<p>Holding the sampling design fixed, larger effective <code>nu</code>
+means more precise estimates and higher model-based power. The amount of
+conductance-implied covariance signal also matters. To make both
+patterns easy to see, we temporarily isolate a modest altitude
+coefficient and vary the signal-to-nugget ratio while holding the
+landscape template fixed.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>altitude_surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  covariates[[<span class="st">&quot;altitude&quot;</span>]], melip.coords,</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="at">directions =</span> <span class="dv">8</span>, <span class="at">saveStack =</span> <span class="cn">TRUE</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>)</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>screen_theta  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">altitude =</span> <span class="sc">-</span><span class="fl">0.25</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>screen_sigma  <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>signal_ratios <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">4</span>)</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>screen_power <span class="ot">&lt;-</span> <span class="cf">function</span>(sample_size, nu, signal_ratio,</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>                         <span class="at">nsim =</span> <span class="dv">10</span>, <span class="at">seed =</span> <span class="dv">100</span>) {</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>  assessment <span class="ot">&lt;-</span> <span class="fu">covariance_response_power</span>(</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>    <span class="at">theta        =</span> screen_theta,</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>    <span class="at">formula      =</span> <span class="sc">~</span> altitude,</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>    <span class="at">data         =</span> altitude_surface,</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>    <span class="at">sample_sizes =</span> sample_size,</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>    <span class="at">strategies   =</span> <span class="st">&quot;spacefill&quot;</span>,</span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>    <span class="at">tau          =</span> signal_ratio <span class="sc">*</span> screen_sigma,</span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a>    <span class="at">sigma        =</span> screen_sigma,</span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a>    <span class="at">nu           =</span> nu,</span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a>    <span class="at">nsim         =</span> nsim,</span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a>    <span class="at">seed         =</span> seed,</span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a>    <span class="at">control      =</span> <span class="fu">NewtonRaphsonControl</span>(<span class="at">maxit =</span> <span class="dv">10</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a>  )</span>
+<span id="cb5-25"><a href="#cb5-25" tabindex="-1"></a>  out <span class="ot">&lt;-</span> assessment<span class="sc">$</span>parameter_summary</span>
+<span id="cb5-26"><a href="#cb5-26" tabindex="-1"></a>  <span class="fu">data.frame</span>(sample_size, nu, signal_ratio,</span>
+<span id="cb5-27"><a href="#cb5-27" tabindex="-1"></a>             <span class="at">fit_rate =</span> out<span class="sc">$</span>fit_rate, <span class="at">power =</span> out<span class="sc">$</span>power)</span>
+<span id="cb5-28"><a href="#cb5-28" tabindex="-1"></a>}</span>
+<span id="cb5-29"><a href="#cb5-29" tabindex="-1"></a></span>
+<span id="cb5-30"><a href="#cb5-30" tabindex="-1"></a>screen_grid <span class="ot">&lt;-</span> <span class="cf">function</span>(sample_sizes, nu_values, seed) {</span>
+<span id="cb5-31"><a href="#cb5-31" tabindex="-1"></a>  grid <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="at">sample_size =</span> sample_sizes, <span class="at">nu =</span> nu_values,</span>
+<span id="cb5-32"><a href="#cb5-32" tabindex="-1"></a>                      <span class="at">signal_ratio =</span> signal_ratios)</span>
+<span id="cb5-33"><a href="#cb5-33" tabindex="-1"></a>  <span class="fu">do.call</span>(rbind, <span class="fu">Map</span>(screen_power,</span>
+<span id="cb5-34"><a href="#cb5-34" tabindex="-1"></a>                     <span class="at">sample_size =</span> grid<span class="sc">$</span>sample_size,</span>
+<span id="cb5-35"><a href="#cb5-35" tabindex="-1"></a>                     <span class="at">nu =</span> grid<span class="sc">$</span>nu,</span>
+<span id="cb5-36"><a href="#cb5-36" tabindex="-1"></a>                     <span class="at">signal_ratio =</span> grid<span class="sc">$</span>signal_ratio,</span>
+<span id="cb5-37"><a href="#cb5-37" tabindex="-1"></a>                     <span class="at">seed =</span> seed <span class="sc">+</span> <span class="fu">seq_len</span>(<span class="fu">nrow</span>(grid))))</span>
+<span id="cb5-38"><a href="#cb5-38" tabindex="-1"></a>}</span>
+<span id="cb5-39"><a href="#cb5-39" tabindex="-1"></a></span>
+<span id="cb5-40"><a href="#cb5-40" tabindex="-1"></a>marker_power <span class="ot">&lt;-</span> <span class="fu">screen_grid</span>(<span class="at">sample_sizes =</span> <span class="dv">20</span>,</span>
+<span id="cb5-41"><a href="#cb5-41" tabindex="-1"></a>                            <span class="at">nu_values =</span> <span class="fu">c</span>(<span class="dv">20</span>, <span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">200</span>),</span>
+<span id="cb5-42"><a href="#cb5-42" tabindex="-1"></a>                            <span class="at">seed =</span> <span class="dv">100</span>)</span>
+<span id="cb5-43"><a href="#cb5-43" tabindex="-1"></a>marker_power</span></code></pre></div>
+<pre><code>#&gt;    sample_size  nu signal_ratio fit_rate power
+#&gt; 1           20  20          0.5      0.9   0.2
+#&gt; 2           20  50          0.5      0.9   0.2
+#&gt; 3           20 100          0.5      0.9   0.1
+#&gt; 4           20 200          0.5      1.0   0.3
+#&gt; 5           20  20          1.0      1.0   0.2
+#&gt; 6           20  50          1.0      1.0   0.2
+#&gt; 7           20 100          1.0      1.0   0.2
+#&gt; 8           20 200          1.0      1.0   0.6
+#&gt; 9           20  20          2.0      1.0   0.1
+#&gt; 10          20  50          2.0      1.0   0.5
+#&gt; 11          20 100          2.0      1.0   0.8
+#&gt; 12          20 200          2.0      1.0   0.9
+#&gt; 13          20  20          4.0      0.9   0.1
+#&gt; 14          20  50          4.0      1.0   0.5
+#&gt; 15          20 100          4.0      1.0   0.7
+#&gt; 16          20 200          4.0      1.0   1.0</code></pre>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">setNames</span>(<span class="fu">c</span>(<span class="st">&quot;#7570b3&quot;</span>, <span class="st">&quot;#1b9e77&quot;</span>, <span class="st">&quot;#d95f02&quot;</span>, <span class="st">&quot;#e7298a&quot;</span>),</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>                 signal_ratios)</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="fu">plot</span>(<span class="cn">NA</span>, <span class="at">xlim =</span> <span class="fu">range</span>(marker_power<span class="sc">$</span>nu), <span class="at">ylim =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">log =</span> <span class="st">&quot;x&quot;</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">&quot;Effective Wishart degrees of freedom (nu)&quot;</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>     <span class="at">ylab =</span> <span class="st">&quot;Model-based power for altitude&quot;</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">&quot;Power vs. effective nu&quot;</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="cf">for</span> (signal_ratio <span class="cf">in</span> signal_ratios) {</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>  sub <span class="ot">&lt;-</span> marker_power[marker_power<span class="sc">$</span>signal_ratio <span class="sc">==</span> signal_ratio, ]</span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  <span class="fu">lines</span>(sub<span class="sc">$</span>nu, sub<span class="sc">$</span>power, <span class="at">type =</span> <span class="st">&quot;b&quot;</span>, <span class="at">pch =</span> <span class="dv">19</span>,</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>        <span class="at">col =</span> cols[<span class="fu">as.character</span>(signal_ratio)])</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a>}</span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="fu">abline</span>(<span class="at">h =</span> <span class="fl">0.8</span>, <span class="at">lty =</span> <span class="dv">2</span>, <span class="at">col =</span> <span class="st">&quot;grey50&quot;</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">&quot;bottomright&quot;</span>, <span class="at">legend =</span> <span class="fu">paste</span>(<span class="st">&quot;tau / sigma =&quot;</span>, signal_ratios),</span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a>       <span class="at">col =</span> cols, <span class="at">lty =</span> <span class="dv">1</span>, <span class="at">pch =</span> <span class="dv">19</span>, <span class="at">bty =</span> <span class="st">&quot;n&quot;</span>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Power responds to effective Wishart degrees of freedom and the tau / sigma signal ratio. Each point is the proportion of 10 simulated data sets in which the altitude coefficient had the correct sign and a two-sided Wald p-value below alpha = 0.05. The 20 sampling sites are held fixed. The small demonstration grid leaves visible Monte Carlo variation." src="data:image/png;base64,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" alt="Power responds to effective Wishart degrees of freedom and the tau / sigma signal ratio. Each point is the proportion of 10 simulated data sets in which the altitude coefficient had the correct sign and a two-sided Wald p-value below alpha = 0.05. The 20 sampling sites are held fixed. The small demonstration grid leaves visible Monte Carlo variation." />
+<div class="figcaption"><strong><em>Power responds to effective Wishart
+degrees of freedom and the tau / sigma signal ratio.</em></strong> Each
+point is the proportion of 10 simulated data sets in which the altitude
+coefficient had the correct sign and a two-sided Wald p-value below
+alpha = 0.05. The 20 sampling sites are held fixed. The small
+demonstration grid leaves visible Monte Carlo variation.</div>
+</div>
+<p>The curves show the conditional tradeoff in this simulation.
+Additional independent marker information helps, but it cannot fully
+rescue a weak conductance-implied covariance signal. Conversely,
+stronger simulated signal reduces the effective <code>nu</code> needed
+to reach a specified power target.</p>
+<p>For covariance simulation, use <code>nu</code> values at least as
+large as the number of sampled sites.
+<code>simulate_covariance_response()</code> uses
+<code>stats::rWishart()</code>, which requires the Wishart degrees of
+freedom to be at least the covariance-matrix dimension.</p>
+<hr />
+</div>
+<div id="the-role-of-sample-size-in-statistical-power" class="section level2" number="6">
+<h2><span class="header-section-number">6</span> The role of sample size
+in statistical power</h2>
+<p>Now hold the effective Wishart degrees of freedom fixed at
+<code>nu = 100</code> and vary the number of sampling sites. Each curve
+again represents a different <span class="math inline">\(\tau /
+\sigma\)</span> ratio.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>sample_grid <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">8</span>, <span class="dv">12</span>, <span class="dv">20</span>, <span class="dv">34</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>site_power <span class="ot">&lt;-</span> <span class="fu">screen_grid</span>(<span class="at">sample_sizes =</span> sample_grid,</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>                          <span class="at">nu_values =</span> <span class="dv">100</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>                          <span class="at">seed =</span> <span class="dv">200</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>site_power</span></code></pre></div>
+<pre><code>#&gt;    sample_size  nu signal_ratio fit_rate power
+#&gt; 1            8 100          0.5      0.8   0.1
+#&gt; 2           12 100          0.5      0.9   0.1
+#&gt; 3           20 100          0.5      1.0   0.2
+#&gt; 4           34 100          0.5      1.0   0.1
+#&gt; 5            8 100          1.0      0.9   0.5
+#&gt; 6           12 100          1.0      1.0   0.4
+#&gt; 7           20 100          1.0      1.0   0.4
+#&gt; 8           34 100          1.0      1.0   0.4
+#&gt; 9            8 100          2.0      0.9   0.3
+#&gt; 10          12 100          2.0      1.0   0.7
+#&gt; 11          20 100          2.0      1.0   0.5
+#&gt; 12          34 100          2.0      1.0   0.9
+#&gt; 13           8 100          4.0      1.0   0.6
+#&gt; 14          12 100          4.0      1.0   0.9
+#&gt; 15          20 100          4.0      1.0   0.9
+#&gt; 16          34 100          4.0      1.0   1.0</code></pre>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">plot</span>(<span class="cn">NA</span>, <span class="at">xlim =</span> <span class="fu">range</span>(site_power<span class="sc">$</span>sample_size), <span class="at">ylim =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>),</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">&quot;Number of sampling sites&quot;</span>, <span class="at">ylab =</span> <span class="st">&quot;Model-based power for altitude&quot;</span>,</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">&quot;Power vs. sample size&quot;</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="cf">for</span> (signal_ratio <span class="cf">in</span> signal_ratios) {</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  sub <span class="ot">&lt;-</span> site_power[site_power<span class="sc">$</span>signal_ratio <span class="sc">==</span> signal_ratio, ]</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="fu">lines</span>(sub<span class="sc">$</span>sample_size, sub<span class="sc">$</span>power, <span class="at">type =</span> <span class="st">&quot;b&quot;</span>, <span class="at">pch =</span> <span class="dv">19</span>,</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>        <span class="at">col =</span> cols[<span class="fu">as.character</span>(signal_ratio)])</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>}</span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="fu">abline</span>(<span class="at">h =</span> <span class="fl">0.8</span>, <span class="at">lty =</span> <span class="dv">2</span>, <span class="at">col =</span> <span class="st">&quot;grey50&quot;</span>)</span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">&quot;bottomright&quot;</span>, <span class="at">legend =</span> <span class="fu">paste</span>(<span class="st">&quot;tau / sigma =&quot;</span>, signal_ratios),</span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>       <span class="at">col =</span> cols, <span class="at">lty =</span> <span class="dv">1</span>, <span class="at">pch =</span> <span class="dv">19</span>, <span class="at">bty =</span> <span class="st">&quot;n&quot;</span>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Power responds to sampling sites and the tau / sigma signal ratio. Each point is the proportion of 10 simulated data sets in which the altitude coefficient had the correct sign and a two-sided Wald p-value below alpha = 0.05. Effective Wishart degrees of freedom are held fixed at nu = 100. The small demonstration grid leaves visible Monte Carlo variation." src="data:image/png;base64,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" alt="Power responds to sampling sites and the tau / sigma signal ratio. Each point is the proportion of 10 simulated data sets in which the altitude coefficient had the correct sign and a two-sided Wald p-value below alpha = 0.05. Effective Wishart degrees of freedom are held fixed at nu = 100. The small demonstration grid leaves visible Monte Carlo variation." />
+<div class="figcaption"><strong><em>Power responds to sampling sites and
+the tau / sigma signal ratio.</em></strong> Each point is the proportion
+of 10 simulated data sets in which the altitude coefficient had the
+correct sign and a two-sided Wald p-value below alpha = 0.05. Effective
+Wishart degrees of freedom are held fixed at nu = 100. The small
+demonstration grid leaves visible Monte Carlo variation.</div>
+</div>
+<p>Across repeated assessments, more sites generally improve power
+because the fitted covariance structure is informed by a larger sample
+from the landscape. The ten-replicate teaching grid is intentionally
+small, so its curves are not perfectly monotone. Site placement also
+matters. Real assessments should use more replicates and compare
+plausible placement strategies rather than treat sample count as the
+only design decision.</p>
+<hr />
+</div>
+<div id="comparing-sampling-strategies-and-candidate-models" class="section level2" number="7">
+<h2><span class="header-section-number">7</span> Comparing sampling
+strategies and candidate models</h2>
+<p><code>covariance_response_power()</code> automates the same loop
+across <strong>sampling designs</strong>: it subsets the focal sites in
+the surface to a target sample size, optionally using different
+placement strategies, simulates responses, refits candidate models, and
+summarizes recovery. Because all designs reuse one graph, it is
+fast.</p>
+<p>Here we compare three sample sizes under two placement strategies,
+and we fit two candidate models per replicate: the true two-covariate
+model and a reduced altitude-only model. This lets us measure both
+<strong>parameter recovery</strong> and <strong>model-selection</strong>
+performance.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>power <span class="ot">&lt;-</span> <span class="fu">covariance_response_power</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="at">theta             =</span> theta_true,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">formula           =</span> <span class="sc">~</span> forestcover <span class="sc">+</span> altitude,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">data              =</span> surface,</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>  <span class="at">sample_sizes      =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">34</span>),</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  <span class="at">strategies        =</span> <span class="fu">c</span>(<span class="st">&quot;spacefill&quot;</span>, <span class="st">&quot;random&quot;</span>),</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="at">fit_models =</span> <span class="fu">list</span>(</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>    <span class="at">full          =</span> <span class="fu">list</span>(<span class="at">formula =</span> <span class="sc">~</span> forestcover <span class="sc">+</span> altitude),</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a>    <span class="at">altitude_only =</span> <span class="fu">list</span>(<span class="at">formula =</span> <span class="sc">~</span> altitude)</span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>  ),</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>  <span class="at">tau        =</span> tau_true,</span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a>  <span class="at">sigma      =</span> sigma_true,</span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a>  <span class="at">nu         =</span> <span class="dv">100</span>,</span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a>  <span class="at">nsim       =</span> <span class="dv">20</span>,    <span class="co"># increase for smoother estimates in a real study</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a>  <span class="at">n_designs  =</span> <span class="dv">2</span>,     <span class="co"># random designs evaluated per sample size</span></span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a>  <span class="at">seed       =</span> <span class="dv">1</span>,</span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a>  <span class="at">control    =</span> <span class="fu">NewtonRaphsonControl</span>(<span class="at">maxit =</span> <span class="dv">10</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a>)</span>
+<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a></span>
+<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a>power</span></code></pre></div>
+<pre><code>#&gt; Covariance-response power assessment
+#&gt; Simulations per design: 20 
+#&gt; Sample sizes: 10, 20, 34 
+#&gt; Strategies: spacefill, random 
+#&gt; 
+#&gt;   strategy sample_size         model n_replicates fit_rate conductance_power
+#&gt;     random          10 altitude_only           40        1             0.000
+#&gt;     random          10          full           40        1             0.725
+#&gt;  spacefill          10 altitude_only           20        1             0.000
+#&gt;  spacefill          10          full           20        1             0.850
+#&gt;     random          20 altitude_only           40        1             0.000
+#&gt;     random          20          full           40        1             0.925
+#&gt;  spacefill          20 altitude_only           20        1             0.000
+#&gt;  spacefill          20          full           20        1             0.950
+#&gt;     random          34 altitude_only           40        1             0.000
+#&gt;     random          34          full           40        1             0.950
+#&gt;  spacefill          34 altitude_only           20        1             0.000
+#&gt;  spacefill          34          full           20        1             0.950
+#&gt;  mean_conductance_cor mean_conductance_spearman selected_AIC_rate
+#&gt;             0.4246024                 0.7130792             0.525
+#&gt;             0.8609271                 0.9222822             0.475
+#&gt;             0.4445664                 0.7506097             0.150
+#&gt;             0.9135440                 0.9636633             0.850
+#&gt;             0.4462733                 0.7506097             0.100
+#&gt;             0.9611628                 0.9718408             0.900
+#&gt;             0.4455321                 0.7506097             0.050
+#&gt;             0.9721211                 0.9888001             0.950
+#&gt;             0.4471640                 0.7506097             0.000
+#&gt;             0.9823494                 0.9854258             1.000
+#&gt;             0.4466639                 0.7506097             0.000
+#&gt;             0.9856608                 0.9890036             1.000
+#&gt;  selected_AICc_rate mean_elapsed conductance_cor_threshold all_parameter_power
+#&gt;               0.925      1.34500                       0.9               0.800
+#&gt;               0.075      2.12525                       0.9               0.250
+#&gt;               0.650      1.80450                       0.9               0.900
+#&gt;               0.350      4.10250                       0.9               0.100
+#&gt;               0.225      1.37675                       0.9               0.950
+#&gt;               0.775      2.26950                       0.9               0.500
+#&gt;               0.050      1.54900                       0.9               1.000
+#&gt;               0.950      2.83600                       0.9               0.700
+#&gt;               0.075      1.60675                       0.9               1.000
+#&gt;               0.925      2.87550                       0.9               0.875
+#&gt;               0.050      1.60450                       0.9               1.000
+#&gt;               0.950      3.04000                       0.9               0.950</code></pre>
+<div id="scenario-level-summary" class="section level3" number="7.1">
+<h3><span class="header-section-number">7.1</span> Scenario-level
+summary</h3>
+<p>The <code>summary</code> table has one row per (strategy, sample
+size, model):</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>power<span class="sc">$</span>summary[, <span class="fu">c</span>(<span class="st">&quot;strategy&quot;</span>, <span class="st">&quot;sample_size&quot;</span>, <span class="st">&quot;model&quot;</span>,</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>                  <span class="st">&quot;fit_rate&quot;</span>, <span class="st">&quot;conductance_power&quot;</span>,</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>                  <span class="st">&quot;mean_conductance_cor&quot;</span>, <span class="st">&quot;selected_AIC_rate&quot;</span>)]</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="co">#&gt;     strategy sample_size         model fit_rate conductance_power</span></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="co">#&gt; 1     random          10 altitude_only        1             0.000</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt; 7     random          10          full        1             0.725</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; 2  spacefill          10 altitude_only        1             0.000</span></span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="co">#&gt; 8  spacefill          10          full        1             0.850</span></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="co">#&gt; 3     random          20 altitude_only        1             0.000</span></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a><span class="co">#&gt; 9     random          20          full        1             0.925</span></span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="co">#&gt; 4  spacefill          20 altitude_only        1             0.000</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a><span class="co">#&gt; 10 spacefill          20          full        1             0.950</span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="co">#&gt; 5     random          34 altitude_only        1             0.000</span></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="co">#&gt; 11    random          34          full        1             0.950</span></span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a><span class="co">#&gt; 6  spacefill          34 altitude_only        1             0.000</span></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a><span class="co">#&gt; 12 spacefill          34          full        1             0.950</span></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="co">#&gt;    mean_conductance_cor selected_AIC_rate</span></span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a><span class="co">#&gt; 1             0.4246024             0.525</span></span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a><span class="co">#&gt; 7             0.8609271             0.475</span></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a><span class="co">#&gt; 2             0.4445664             0.150</span></span>
+<span id="cb13-21"><a href="#cb13-21" tabindex="-1"></a><span class="co">#&gt; 8             0.9135440             0.850</span></span>
+<span id="cb13-22"><a href="#cb13-22" tabindex="-1"></a><span class="co">#&gt; 3             0.4462733             0.100</span></span>
+<span id="cb13-23"><a href="#cb13-23" tabindex="-1"></a><span class="co">#&gt; 9             0.9611628             0.900</span></span>
+<span id="cb13-24"><a href="#cb13-24" tabindex="-1"></a><span class="co">#&gt; 4             0.4455321             0.050</span></span>
+<span id="cb13-25"><a href="#cb13-25" tabindex="-1"></a><span class="co">#&gt; 10            0.9721211             0.950</span></span>
+<span id="cb13-26"><a href="#cb13-26" tabindex="-1"></a><span class="co">#&gt; 5             0.4471640             0.000</span></span>
+<span id="cb13-27"><a href="#cb13-27" tabindex="-1"></a><span class="co">#&gt; 11            0.9823494             1.000</span></span>
+<span id="cb13-28"><a href="#cb13-28" tabindex="-1"></a><span class="co">#&gt; 6             0.4466639             0.000</span></span>
+<span id="cb13-29"><a href="#cb13-29" tabindex="-1"></a><span class="co">#&gt; 12            0.9856608             1.000</span></span></code></pre></div>
+<p>Key columns:</p>
+<ul>
+<li><strong><code>fit_rate</code></strong>: fraction of replicates that
+converged. Values below 1 flag a design where the model is hard to fit
+(often too few sites).</li>
+<li><strong><code>conductance_power</code></strong>: fraction of
+replicates whose fitted conductance surface has a Pearson correlation
+with the generating surface above <code>conductance_cor_threshold</code>
+(default 0.9). This measures recovery of the relative spatial pattern,
+not its absolute scale or an ecological mechanism. It is useful for
+spline models whose basis coefficients are not individually
+interpretable.</li>
+<li><strong><code>mean_conductance_cor</code></strong>: average
+correlation between the fitted and true conductance surfaces.</li>
+<li><strong><code>selected_AIC_rate</code></strong>: how often each
+model had the lowest AIC within the specified, comparable candidate set.
+For the <code>full</code> model, this is the rate at which the
+generating formula ranked first among those candidates.</li>
+</ul>
+</div>
+<div id="parameter-level-summary" class="section level3" number="7.2">
+<h3><span class="header-section-number">7.2</span> Parameter-level
+summary</h3>
+<p><code>parameter_summary</code> reports per-coefficient power, bias,
+RMSE, and confidence interval coverage:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>power<span class="sc">$</span>parameter_summary[</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  power<span class="sc">$</span>parameter_summary<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;full&quot;</span>,</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">&quot;strategy&quot;</span>, <span class="st">&quot;sample_size&quot;</span>, <span class="st">&quot;parameter&quot;</span>,</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>    <span class="st">&quot;power&quot;</span>, <span class="st">&quot;bias&quot;</span>, <span class="st">&quot;rmse&quot;</span>, <span class="st">&quot;coverage&quot;</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>]</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="co">#&gt;     strategy sample_size   parameter power          bias       rmse coverage</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="co">#&gt; 7     random          10    altitude 0.725 -0.2400864368 0.98008516    0.925</span></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a><span class="co">#&gt; 13    random          10 forestcover 0.250  0.2158918115 0.88777843    0.900</span></span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="co">#&gt; 8  spacefill          10    altitude 0.650  0.0025741755 0.12773899    0.950</span></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="co">#&gt; 14 spacefill          10 forestcover 0.250  1.2020567569 4.94001784    0.950</span></span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a><span class="co">#&gt; 9     random          20    altitude 0.750  0.0002667343 0.15147266    0.950</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a><span class="co">#&gt; 15    random          20 forestcover 0.675  0.0295385668 0.25543407    1.000</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a><span class="co">#&gt; 10 spacefill          20    altitude 0.900 -0.0081386272 0.14531956    0.900</span></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="co">#&gt; 16 spacefill          20 forestcover 0.800  0.1059249666 0.31930860    0.950</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="co">#&gt; 11    random          34    altitude 0.975 -0.0087829656 0.10477135    0.975</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; 17    random          34 forestcover 0.900  0.0161193549 0.16872282    1.000</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a><span class="co">#&gt; 12 spacefill          34    altitude 1.000 -0.0216626697 0.09216619    0.950</span></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a><span class="co">#&gt; 18 spacefill          34 forestcover 0.950  0.0166800620 0.14816763    0.950</span></span></code></pre></div>
+<p>What to look for:</p>
+<ul>
+<li><strong><code>power</code></strong>: proportion of all simulated
+replicates in which the coefficient had the generating sign and a
+two-sided Wald p-value below <code>alpha</code>. Failed or boundary fits
+count as non-detections. Choose a target such as 0.8 before the
+assessment rather than treating it as a universal threshold.</li>
+<li><strong><code>bias</code></strong>: average estimate minus the
+generating value. Persistent bias can reflect model misspecification,
+boundary behavior, optimization failures, or a design too small for the
+asymptotic approximation.</li>
+<li><strong><code>rmse</code></strong>: typical estimation error; should
+shrink as sample size grows.</li>
+<li><strong><code>coverage</code></strong>: fraction of 95% confidence
+intervals that contain the truth. Well-calibrated intervals give ~0.95.
+Coverage well below 0.95 means the reported uncertainty is too
+optimistic for that design.</li>
+</ul>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>ps <span class="ot">&lt;-</span> power<span class="sc">$</span>parameter_summary</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>ps <span class="ot">&lt;-</span> ps[ps<span class="sc">$</span>model <span class="sc">==</span> <span class="st">&quot;full&quot;</span> <span class="sc">&amp;</span> ps<span class="sc">$</span>strategy <span class="sc">==</span> <span class="st">&quot;spacefill&quot;</span>, ]</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="at">forestcover =</span> <span class="st">&quot;#1b9e77&quot;</span>, <span class="at">altitude =</span> <span class="st">&quot;#d95f02&quot;</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a><span class="fu">plot</span>(<span class="cn">NA</span>, <span class="at">xlim =</span> <span class="fu">range</span>(ps<span class="sc">$</span>sample_size), <span class="at">ylim =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>),</span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>     <span class="at">xlab =</span> <span class="st">&quot;Number of sampling sites&quot;</span>, <span class="at">ylab =</span> <span class="st">&quot;Power&quot;</span>,</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">&quot;Parameter recovery vs. sample size&quot;</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="cf">for</span> (p <span class="cf">in</span> <span class="fu">names</span>(cols)) {</span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a>  sub <span class="ot">&lt;-</span> ps[ps<span class="sc">$</span>parameter <span class="sc">==</span> p, ]</span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a>  sub <span class="ot">&lt;-</span> sub[<span class="fu">order</span>(sub<span class="sc">$</span>sample_size), ]</span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a>  <span class="fu">lines</span>(sub<span class="sc">$</span>sample_size, sub<span class="sc">$</span>power, <span class="at">type =</span> <span class="st">&quot;b&quot;</span>, <span class="at">pch =</span> <span class="dv">19</span>, <span class="at">col =</span> cols[p])</span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a>}</span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="fu">abline</span>(<span class="at">h =</span> <span class="fl">0.8</span>, <span class="at">lty =</span> <span class="dv">2</span>, <span class="at">col =</span> <span class="st">&quot;grey50&quot;</span>)</span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">&quot;bottomright&quot;</span>, <span class="at">legend =</span> <span class="fu">names</span>(cols), <span class="at">col =</span> cols,</span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a>       <span class="at">lty =</span> <span class="dv">1</span>, <span class="at">pch =</span> <span class="dv">19</span>, <span class="at">bty =</span> <span class="st">&quot;n&quot;</span>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Power to recover each conductance coefficient as a function of sample size (spacefill design, generating formula). The dashed line marks 80% power." src="data:image/png;base64,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" alt="Power to recover each conductance coefficient as a function of sample size (spacefill design, generating formula). The dashed line marks 80% power." />
+<div class="figcaption"><strong><em>Power to recover each conductance
+coefficient as a function of sample size (spacefill design, generating
+formula).</em></strong> The dashed line marks 80% power.</div>
+</div>
+<hr />
+</div>
+</div>
+<div id="interpreting-and-acting-on-the-results" class="section level2" number="8">
+<h2><span class="header-section-number">8</span> Interpreting and acting
+on the results</h2>
+<p>A design assessment usually answers one of three questions:</p>
+<table>
+<colgroup>
+<col width="22%" />
+<col width="43%" />
+<col width="34%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Question</th>
+<th>Column(s) to read</th>
+<th>Decision rule</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Enough sites?</td>
+<td><code>parameter_summary$power</code>,
+<code>conductance_power</code></td>
+<td>Pick the smallest sample size that reaches your predeclared recovery
+target under conservative scenarios.</td>
+</tr>
+<tr class="even">
+<td>Enough marker information?</td>
+<td>power-vs-<code>nu</code> curves</td>
+<td>Identify the smallest plausible effective <code>nu</code> past the
+power elbow under conservative scenarios.</td>
+</tr>
+<tr class="odd">
+<td>Which site placement?</td>
+<td>compare <code>strategy</code> rows</td>
+<td>Prefer the strategy with higher power / surface correlation at equal
+cost.</td>
+</tr>
+<tr class="even">
+<td>Trustworthy intervals?</td>
+<td><code>parameter_summary$coverage</code></td>
+<td>Require coverage near 0.95 before trusting reported CIs.</td>
+</tr>
+</tbody>
+</table>
+<p>A few practical notes:</p>
+<ul>
+<li><strong>Increase <code>nsim</code>.</strong> This vignette uses
+small <code>nsim</code> so it builds relatively quickly. For a real
+assessment use at least 100-500 simulations per design so that power and
+coverage estimates are stable.</li>
+<li><strong>Match the simulation to your expectations.</strong> The
+answer depends on <code>theta</code>, <code>tau</code>, and
+<code>sigma</code>. If you are unsure, run the assessment across a grid
+of plausible effect sizes and <span class="math inline">\(\tau /
+\sigma\)</span> ratios, then report the range.</li>
+<li><strong>Use and report defensible <code>nu</code> values.</strong>
+Markers in linkage disequilibrium are not independent, so the effective
+<code>nu</code> can be smaller than the raw marker count. Planning with
+an optimistic <code>nu</code> overstates precision and power. Use locus
+count as the primary microsatellite value and report a sensitivity
+analysis.</li>
+<li><strong>Spline and Gaussian models.</strong> For non-linear
+conductance models the individual coefficients are not interpretable;
+lean on <code>conductance_power</code> and
+<code>mean_conductance_cor</code> rather than per-parameter power. Pass
+the relevant factory via <code>conductance_model</code> and
+<code>fit_models</code>.</li>
+</ul>
+<hr />
+</div>
+<div id="quick-reference" class="section level2" number="9">
+<h2><span class="header-section-number">9</span> Quick reference</h2>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a><span class="fu">library</span>(terra)</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="co"># 1. Build a landscape template (saveStack = TRUE enables site subsetting)</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covariates, coords,</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>                               <span class="at">directions =</span> <span class="dv">8</span>, <span class="at">saveStack =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co"># 2. One simulated covariance matrix from specified generating parameters</span></span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a>sim <span class="ot">&lt;-</span> <span class="fu">simulate_covariance_response</span>(</span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>  <span class="at">theta =</span> <span class="fu">c</span>(<span class="at">x1 =</span> <span class="fl">0.6</span>, <span class="at">x2 =</span> <span class="sc">-</span><span class="fl">0.4</span>), <span class="at">formula =</span> <span class="sc">~</span> x1 <span class="sc">+</span> x2,</span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  <span class="at">data =</span> surface, <span class="at">tau =</span> <span class="dv">2</span>, <span class="at">sigma =</span> <span class="dv">1</span>, <span class="at">nu =</span> <span class="dv">100</span>, <span class="at">seed =</span> <span class="dv">1</span></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>)</span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a></span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a><span class="co"># 3. Refit to check recovery</span></span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(sim<span class="sc">$</span>covariance <span class="sc">~</span> x1 <span class="sc">+</span> x2, <span class="at">data =</span> surface,</span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a>                 <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb16-17"><a href="#cb16-17" tabindex="-1"></a>                 <span class="at">measurement_model =</span> wishart_covariance, <span class="at">nu =</span> <span class="dv">100</span>)</span>
+<span id="cb16-18"><a href="#cb16-18" tabindex="-1"></a><span class="fu">coef</span>(fit)</span>
+<span id="cb16-19"><a href="#cb16-19" tabindex="-1"></a></span>
+<span id="cb16-20"><a href="#cb16-20" tabindex="-1"></a><span class="co"># 4. Full design assessment across sample sizes / strategies / models</span></span>
+<span id="cb16-21"><a href="#cb16-21" tabindex="-1"></a>power <span class="ot">&lt;-</span> <span class="fu">covariance_response_power</span>(</span>
+<span id="cb16-22"><a href="#cb16-22" tabindex="-1"></a>  <span class="at">theta =</span> <span class="fu">c</span>(<span class="at">x1 =</span> <span class="fl">0.6</span>, <span class="at">x2 =</span> <span class="sc">-</span><span class="fl">0.4</span>), <span class="at">formula =</span> <span class="sc">~</span> x1 <span class="sc">+</span> x2,</span>
+<span id="cb16-23"><a href="#cb16-23" tabindex="-1"></a>  <span class="at">data =</span> surface, <span class="at">sample_sizes =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>),</span>
+<span id="cb16-24"><a href="#cb16-24" tabindex="-1"></a>  <span class="at">strategies =</span> <span class="fu">c</span>(<span class="st">&quot;spacefill&quot;</span>, <span class="st">&quot;random&quot;</span>),</span>
+<span id="cb16-25"><a href="#cb16-25" tabindex="-1"></a>  <span class="at">tau =</span> <span class="dv">2</span>, <span class="at">sigma =</span> <span class="dv">1</span>, <span class="at">nu =</span> <span class="dv">100</span>, <span class="at">nsim =</span> <span class="dv">200</span>, <span class="at">seed =</span> <span class="dv">1</span></span>
+<span id="cb16-26"><a href="#cb16-26" tabindex="-1"></a>)</span>
+<span id="cb16-27"><a href="#cb16-27" tabindex="-1"></a>power<span class="sc">$</span>summary            <span class="co"># fit rate, conductance recovery, model selection</span></span>
+<span id="cb16-28"><a href="#cb16-28" tabindex="-1"></a>power<span class="sc">$</span>parameter_summary  <span class="co"># power, bias, RMSE, coverage per coefficient</span></span></code></pre></div>
+</div>
+<div id="summary-of-key-functions" class="section level2" number="10">
+<h2><span class="header-section-number">10</span> Summary of key
+functions</h2>
+<table>
+<colgroup>
+<col width="52%" />
+<col width="47%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>conductance_surface()</code></td>
+<td>Build the landscape template; <code>saveStack = TRUE</code> enables
+site subsetting</td>
+</tr>
+<tr class="even">
+<td><code>simulate_covariance_response()</code></td>
+<td>One covariance matrix simulated from known parameters</td>
+</tr>
+<tr class="odd">
+<td><code>terradish()</code></td>
+<td>Refit a simulated data set to check parameter recovery</td>
+</tr>
+<tr class="even">
+<td><code>covariance_response_power()</code></td>
+<td>Full design sweep across sample sizes, strategies, and models</td>
+</tr>
+<tr class="odd">
+<td><code>$summary</code></td>
+<td>Per-scenario fit rate, conductance recovery, and model-selection
+rate</td>
+</tr>
+<tr class="even">
+<td><code>$parameter_summary</code></td>
+<td>Per-coefficient power, bias, RMSE, and interval coverage</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="see-also" class="section level2" number="11">
+<h2><span class="header-section-number">11</span> See also</h2>
+<ul>
+<li><code>vignette(&quot;wishart-covariance&quot;, package = &quot;terradish&quot;)</code>:
+the covariance workflow and a full explanation of <code>nu</code>.</li>
+<li><code>vignette(&quot;getting-started&quot;, package = &quot;terradish&quot;)</code>: the
+core modeling workflow.</li>
+<li><code>vignette(&quot;model-comparison&quot;, package = &quot;terradish&quot;)</code>:
+AIC, likelihood ratio tests, and cross-validation for real data.</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

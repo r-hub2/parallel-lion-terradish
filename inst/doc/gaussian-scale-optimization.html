@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Bill Peterman" />
+
+
+<title>Joint Gaussian Scale Optimization in terradish</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Joint Gaussian Scale Optimization in
+terradish</h1>
+<h4 class="author">Bill Peterman</h4>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#why-optimize-sigma-inside-the-model" id="toc-why-optimize-sigma-inside-the-model"><span class="toc-section-number">1</span> Why optimize sigma inside the
+model?</a></li>
+<li><a href="#what-sigma-means-here" id="toc-what-sigma-means-here"><span class="toc-section-number">2</span>
+What sigma means here</a>
+<ul>
+<li><a href="#are-there-limits-on-sigma" id="toc-are-there-limits-on-sigma"><span class="toc-section-number">2.1</span> Are there limits on
+sigma?</a></li>
+</ul></li>
+<li><a href="#worked-example" id="toc-worked-example"><span class="toc-section-number">3</span> Worked example</a>
+<ul>
+<li><a href="#step-1-build-a-conductance-surface-with-the-original-raster" id="toc-step-1-build-a-conductance-surface-with-the-original-raster"><span class="toc-section-number">3.1</span> Step 1: Build a conductance
+surface with the original raster</a></li>
+<li><a href="#step-2-create-the-gaussian-scale-aware-conductance-model" id="toc-step-2-create-the-gaussian-scale-aware-conductance-model"><span class="toc-section-number">3.2</span> Step 2: Create the Gaussian
+scale-aware conductance model</a></li>
+<li><a href="#step-3-fit-the-one-raster-gaussian-scale-model" id="toc-step-3-fit-the-one-raster-gaussian-scale-model"><span class="toc-section-number">3.3</span> Step 3: Fit the one-raster
+Gaussian scale model</a></li>
+<li><a href="#optional-speed-up-coarse-raster-warm-starts" id="toc-optional-speed-up-coarse-raster-warm-starts"><span class="toc-section-number">3.4</span> Optional speed-up: coarse-raster
+warm starts</a></li>
+<li><a href="#step-4-inspect-the-fitted-one-raster-scale" id="toc-step-4-inspect-the-fitted-one-raster-scale"><span class="toc-section-number">3.5</span> Step 4: Inspect the fitted
+one-raster scale</a></li>
+<li><a href="#step-5-compare-against-a-standard-fixed-raster-fit" id="toc-step-5-compare-against-a-standard-fixed-raster-fit"><span class="toc-section-number">3.6</span> Step 5: Compare against a standard
+fixed-raster fit</a></li>
+<li><a href="#step-6-summarize-the-one-raster-fit" id="toc-step-6-summarize-the-one-raster-fit"><span class="toc-section-number">3.7</span> Step 6: Summarize the one-raster
+fit</a></li>
+<li><a href="#step-7-recover-the-fitted-conductance-surface" id="toc-step-7-recover-the-fitted-conductance-surface"><span class="toc-section-number">3.8</span> Step 7: Recover the fitted
+conductance surface</a></li>
+</ul></li>
+<li><a href="#stage-2-add-a-second-raster-only-after-sigma-looks-sensible" id="toc-stage-2-add-a-second-raster-only-after-sigma-looks-sensible"><span class="toc-section-number">4</span> Stage 2: Add a second raster only
+after sigma looks sensible</a></li>
+<li><a href="#important-current-limitations" id="toc-important-current-limitations"><span class="toc-section-number">5</span> Important current
+limitations</a></li>
+<li><a href="#where-to-go-with-your-analysis" id="toc-where-to-go-with-your-analysis"><span class="toc-section-number">6</span> Where to go with your
+analysis</a></li>
+<li><a href="#quick-reference-the-full-scale-optimization-workflow" id="toc-quick-reference-the-full-scale-optimization-workflow"><span class="toc-section-number">7</span> Quick reference: the full
+scale-optimization workflow</a></li>
+<li><a href="#summary-of-key-functions" id="toc-summary-of-key-functions"><span class="toc-section-number">8</span> Summary of key functions</a></li>
+<li><a href="#see-also" id="toc-see-also"><span class="toc-section-number">9</span> See also</a></li>
+</ul>
+</div>
+
+<div id="why-optimize-sigma-inside-the-model" class="section level2" number="1">
+<h2><span class="header-section-number">1</span> Why optimize sigma
+inside the model?</h2>
+<p>The original <code>radish</code> workflow for raster smoothing
+usually worked in two steps:</p>
+<ol style="list-style-type: decimal">
+<li>Smooth each raster at several candidate scales.</li>
+<li>Fit a resistance model to each smoothed raster surface and compare
+the fits.</li>
+</ol>
+<p>That approach is still useful, but it treats scale as an
+<strong>outer</strong> tuning parameter. The new native Gaussian
+conductance system in <code>terradish</code> moves the scale parameter
+into the conductance model itself, so the optimizer can update:</p>
+<ul>
+<li>the conductance coefficient(s), and</li>
+<li>the smoothing scale(s)</li>
+</ul>
+<p>in the same likelihood calculation.</p>
+<p>This vignette shows the current implementation of that idea using
+<code>gaussian_smoothed_loglinear_conductance()</code>.</p>
+<hr />
+</div>
+<div id="what-sigma-means-here" class="section level2" number="2">
+<h2><span class="header-section-number">2</span> What sigma means
+here</h2>
+<p>For a raster covariate <code>x</code>, the Gaussian scale-aware model
+first smooths the raster with a Gaussian kernel and then uses the
+smoothed values in the usual log-linear conductance model.</p>
+<p>Conceptually:</p>
+<p><span class="math display">\[C_i = \exp(\beta \cdot
+x_{i,\sigma})\]</span></p>
+<p>where:</p>
+<ul>
+<li><span class="math inline">\(x_{i,\sigma}\)</span> is the
+Gaussian-smoothed raster value at cell <em>i</em></li>
+<li><span class="math inline">\(\beta\)</span> is the conductance
+coefficient</li>
+<li><span class="math inline">\(\sigma\)</span> controls how broad the
+smoothing kernel is</li>
+</ul>
+<p>Small <code>sigma</code> means that the raster is averaged over a
+narrow neighborhood. Large <code>sigma</code> means that it is averaged
+over a broader neighborhood. Here, <code>sigma</code> is a Gaussian
+smoothing scale in the raster’s map units. It is not an estimate of
+dispersal distance, home-range size, movement distance, or the spatial
+scale of a causal ecological process.</p>
+<div id="are-there-limits-on-sigma" class="section level3" number="2.1">
+<h3><span class="header-section-number">2.1</span> Are there limits on
+sigma?</h3>
+<p>Yes. <code>terradish</code> now estimates <code>sigma</code> directly
+on its natural distance scale and fits it within explicit lower and
+upper bounds.</p>
+<p>By default, those bounds are data-derived:</p>
+<ul>
+<li>the lower bound is half of the mean raster cell width</li>
+<li>the upper bound is the diagonal length of the retained raster
+extent</li>
+</ul>
+<p>You can override those defaults with <code>sigma_lower =</code> and
+<code>sigma_upper =</code> when you create the conductance model.</p>
+<p>Internally, the optimizer now works on a converted sigma scale by
+default, using approximate cell-width units. The fitted coefficients and
+summaries are still reported back in map units for users, so the
+conversion helps the optimization without changing the interpretation
+target.</p>
+<p>Two practical caveats are worth keeping in mind:</p>
+<ul>
+<li>factor-valued raster layers are rejected for this Gaussian
+conductance model rather than being treated as scalable predictors</li>
+<li>leverage / <code>partial_X</code> diagnostics are still unavailable,
+because the current diagnostic machinery assumes a one-to-one match
+between conductance parameters and design-matrix covariates</li>
+</ul>
+<hr />
+</div>
+</div>
+<div id="worked-example" class="section level2" number="3">
+<h2><span class="header-section-number">3</span> Worked example</h2>
+<p>We will fit a small staged example using the <code>melip</code> data.
+To keep the vignette fast and stable, we will:</p>
+<ul>
+<li>use only eight sampling sites</li>
+<li>start with one raster covariate (<code>forestcover</code>)</li>
+<li>use <code>mlpe</code> as the measurement model, because the response
+matrix contains non-independent pairwise genetic distances</li>
+</ul>
+<p>This is enough to show the practical workflow without making the
+vignette slow. The main goal here is not to maximize model complexity.
+Instead, we will use the staged workflow that is usually safest for real
+data:</p>
+<ol style="list-style-type: decimal">
+<li>fit a one-raster Gaussian scale model</li>
+<li>compare it to a standard fixed-raster model</li>
+<li>only then add a second raster and inspect whether the fitted scales
+still behave sensibly</li>
+</ol>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(terra)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">data</span>(melip)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>melip.forestcover <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.forestcover)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>melip.altitude <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.altitude)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>melip.coords <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.coords)</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>keep <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">8</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>melip.Fst <span class="ot">&lt;-</span> melip.Fst[keep, keep, drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>coords <span class="ot">&lt;-</span> melip.coords[keep]</span></code></pre></div>
+<div id="step-1-build-a-conductance-surface-with-the-original-raster" class="section level3" number="3.1">
+<h3><span class="header-section-number">3.1</span> Step 1: Build a
+conductance surface with the original raster</h3>
+<p>Unlike the standard fixed-raster workflow, we do <strong>not</strong>
+pre-scale the raster with <code>scale_covariates()</code> here. The
+Gaussian conductance model smooths the raw raster first, then
+standardizes the active-cell values internally at each parameter
+evaluation.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>covariates <span class="ot">&lt;-</span> melip.forestcover</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">names</span>(covariates) <span class="ot">&lt;-</span> <span class="st">&quot;forestcover&quot;</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  covariates,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  coords,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="at">directions =</span> <span class="dv">8</span>,</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>  <span class="at">saveStack =</span> <span class="cn">TRUE</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>)</span></code></pre></div>
+<p>Two details matter here:</p>
+<ul>
+<li><code>saveStack = TRUE</code> is required, because the Gaussian
+conductance model needs the retained raster stack as its smoothing
+domain.</li>
+<li>We are fitting a smoothing scale for the raster itself, so the
+original raster values need to be available.</li>
+</ul>
+</div>
+<div id="step-2-create-the-gaussian-scale-aware-conductance-model" class="section level3" number="3.2">
+<h3><span class="header-section-number">3.2</span> Step 2: Create the
+Gaussian scale-aware conductance model</h3>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>gaussian_model <span class="ot">&lt;-</span> <span class="fu">gaussian_smoothed_loglinear_conductance</span>(surface)</span></code></pre></div>
+<p>This conductance model will estimate two parameters:</p>
+<ul>
+<li><code>forestcover</code>: the conductance coefficient</li>
+<li><code>sigma.forestcover</code>: the Gaussian smoothing scale on the
+natural distance scale</li>
+</ul>
+<p>The same mechanism also supports interactions and polynomial terms
+after smoothing, but it is usually better to start with the simplest
+one-raster model you can justify.</p>
+</div>
+<div id="step-3-fit-the-one-raster-gaussian-scale-model" class="section level3" number="3.3">
+<h3><span class="header-section-number">3.3</span> Step 3: Fit the
+one-raster Gaussian scale model</h3>
+<p><code>optimizer = &quot;auto&quot;</code> currently resolves to BFGS for this
+conductance model. That is intentional: the native Gaussian scale path
+supports analytic gradients, and BFGS is the stable first optimizer for
+the joint <code>beta + sigma</code> parameter vector.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>fit_gaussian <span class="ot">&lt;-</span> <span class="fu">terradish</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  melip.Fst <span class="sc">~</span> forestcover,</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="at">data =</span> surface,</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="at">conductance_model =</span> gaussian_model,</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="at">measurement_model =</span> mlpe,</span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="at">optimizer =</span> <span class="st">&quot;auto&quot;</span>,</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="at">leverage =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">NewtonRaphsonControl</span>(<span class="at">maxit =</span> <span class="dv">12</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a>)</span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>fit_gaussian</span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; Conductance surface estimated by maximum likelihood</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; Call:   terradish(formula = melip.Fst ~ forestcover, data = surface, </span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt;     conductance_model = gaussian_model, measurement_model = mlpe, </span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt;     leverage = FALSE, optimizer = &quot;auto&quot;, control = NewtonRaphsonControl(maxit = 12, </span></span>
+<span id="cb4-16"><a href="#cb4-16" tabindex="-1"></a><span class="co">#&gt;         verbose = FALSE))</span></span>
+<span id="cb4-17"><a href="#cb4-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-18"><a href="#cb4-18" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb4-19"><a href="#cb4-19" tabindex="-1"></a><span class="co">#&gt;       forestcover  sigma.forestcover  </span></span>
+<span id="cb4-20"><a href="#cb4-20" tabindex="-1"></a><span class="co">#&gt;          -0.01596            0.02250  </span></span>
+<span id="cb4-21"><a href="#cb4-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb4-22"><a href="#cb4-22" tabindex="-1"></a><span class="co">#&gt; Loglikelihood: 111.8887 (6 degrees freedom)   AIC: -211.7773</span></span></code></pre></div>
+</div>
+<div id="optional-speed-up-coarse-raster-warm-starts" class="section level3" number="3.4">
+<h3><span class="header-section-number">3.4</span> Optional speed-up:
+coarse-raster warm starts</h3>
+<p>Gaussian scale optimization can be expensive because every likelihood
+evaluation has two costly pieces:</p>
+<ol style="list-style-type: decimal">
+<li>smooth the raster at the proposed <code>sigma</code></li>
+<li>solve the graph Laplacian to get resistance distances</li>
+</ol>
+<p>For large rasters, you can ask <code>terradish()</code> to optimize
+first on one or more aggregated rasters and then refine the result on
+the original surface:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>fit_gaussian_coarse <span class="ot">&lt;-</span> <span class="fu">terradish</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  melip.Fst <span class="sc">~</span> forestcover,</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="at">data =</span> surface,</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="at">conductance_model =</span> gaussian_model,</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">measurement_model =</span> mlpe,</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="at">approximation =</span> <span class="st">&quot;coarse_raster&quot;</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">approximation_control =</span> <span class="fu">list</span>(</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>    <span class="at">factor =</span> <span class="fu">c</span>(<span class="dv">4</span>, <span class="dv">2</span>),</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>    <span class="at">exact_refine =</span> <span class="cn">TRUE</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>  ),</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>  <span class="at">optimizer =</span> <span class="st">&quot;auto&quot;</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>  <span class="at">leverage =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">NewtonRaphsonControl</span>(<span class="at">maxit =</span> <span class="dv">12</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>)</span></code></pre></div>
+<p>The coarse stages rebuild the Gaussian smoother on each aggregated
+raster, but they keep the full-resolution <code>sigma</code> bounds and
+unit conversion. That means a coarse-stage <code>sigma</code> is still
+interpreted in the original map units. With
+<code>exact_refine = TRUE</code>, the final model is not a coarse
+approximation; it is the full-resolution fit initialized from the coarse
+result.</p>
+</div>
+<div id="step-4-inspect-the-fitted-one-raster-scale" class="section level3" number="3.5">
+<h3><span class="header-section-number">3.5</span> Step 4: Inspect the
+fitted one-raster scale</h3>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">coef</span>(fit_gaussian)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="co">#&gt;       forestcover sigma.forestcover </span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co">#&gt;       -0.01596426        0.02250000</span></span></code></pre></div>
+<p>The conductance coefficient tells us whether smoothed forest cover is
+associated with higher or lower conductance. The scale parameter is
+already on its natural scale, so we can summarize it directly:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">coef</span>(fit_gaussian)[[<span class="st">&quot;sigma.forestcover&quot;</span>]]</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="co">#&gt; [1] 0.0225</span></span></code></pre></div>
+<p><code>gaussian_scale_summary()</code> converts the fitted sigma
+values into:</p>
+<ul>
+<li>the native raster distance scale</li>
+<li>the internal optimization scale and its conversion factor</li>
+<li>raster cell widths</li>
+<li>one-dimensional Gaussian half-widths</li>
+<li>two-dimensional radial extents that contain a chosen amount of
+kernel mass</li>
+</ul>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">gaussian_scale_summary</span>(fit_gaussian)</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="co">#&gt;     covariate  sigma sigma_lower sigma_upper sigma_internal sigma_conversion</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="co">#&gt; 1 forestcover 0.0225          NA          NA            0.5            0.045</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt;   sigma_conversion_mode native_unit sigma_cells_x sigma_cells_y    axis_50</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt; 1                  cell     degrees           0.5           0.5 0.01517602</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt;    radial_50    axis_95 radial_95</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; 1 0.02649173 0.04409919 0.0550743</span></span></code></pre></div>
+<p>That table is often the quickest way to interpret the fitted
+smoothing scale. For example, <code>radial_95</code> is the radius that
+contains approximately 95% of the Gaussian kernel mass, while
+<code>sigma_cells_x</code> and <code>sigma_cells_y</code> show how broad
+the smoothing kernel is relative to the raster resolution.</p>
+<p>You can also visualize the fitted kernel directly. The
+<code>sigma</code> plot shows the Gaussian weight curve over distance
+for each fitted scale parameter, with a vertical dashed line at the
+fitted distance containing 90% of the one-dimensional kernel mass and a
+shaded uncertainty band for that distance. Each panel is also annotated
+with:</p>
+<ul>
+<li>the fitted <code>sigma</code></li>
+<li>the fitted 90% kernel-mass distance</li>
+<li>the corresponding confidence interval bounds</li>
+</ul>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">plot</span>(fit_gaussian, <span class="at">type =</span> <span class="st">&quot;sigma&quot;</span>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Fitted Gaussian kernel with uncertainty band. The dashed line marks the distance containing 90% of the one-dimensional kernel mass." src="data:image/png;base64,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" alt="Fitted Gaussian kernel with uncertainty band. The dashed line marks the distance containing 90% of the one-dimensional kernel mass." />
+<div class="figcaption"><strong><em>Fitted Gaussian kernel with
+uncertainty band. The dashed line marks the distance containing 90% of
+the one-dimensional kernel mass.</em></strong></div>
+</div>
+<p>If you already know how to convert your map units into a more
+interpretable distance scale, you can relabel the plot directly. For
+example, if one map unit corresponds to one meter, then multiplying by
+<code>0.001</code> reports distances in kilometers:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">plot</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  fit_gaussian,</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="at">type =</span> <span class="st">&quot;sigma&quot;</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="at">distance_per_map_unit =</span> <span class="fl">0.001</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">distance_unit =</span> <span class="st">&quot;km&quot;</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Fitted Gaussian kernel with x-axis relabeled in kilometers." src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAkAAAAGwCAMAAAB2PiqAAAABJlBMVEUAAAAAADoAAGYAOjoAOmYAOpAAXKMAZmYAZrYzADMzM4AzgMU6AAA6ADo6AGY6OgA6Ojo6OmY6OpA6ZmY6ZpA6ZrY6kLY6kNtco+VmAABmADpmAGZmOgBmOjpmOmZmOpBmZgBmZjpmkJBmkLZmkNtmtttmtv+AMwCAxeWQOgCQOjqQOmaQZjqQZmaQkDqQkGaQkLaQtmaQtpCQtraQttuQ2/+jXAC2ZgC2Zjq2Zma2kDq2kGa2kJC2tma2tpC2tra2ttu225C229u22/+2/7a2/9u2///F5eXZXwLbkDrbkGbbtmbbtpDbtrbb25Db27bb29vb2//b/7bb/9vb///lo1zlxYDl5aPl5cXl5eX/tmb/tpD/25D/27b/29v//7b//9v///+JVEezAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAVhElEQVR4nO2dj58ax3nGh5NIaIsl6+KGIslp3TS02E7quqHYThollU1DZcuxgtMKY8P+//9EZ/YXu7DAy8wzLPfq+X6kW+D2ZjX3fDXz7u5wZxJCAjBt/wPI3YYCkSAoEAmCApEgKBAJggKRICgQCYICkSCwAs1NZ3J0h++fQ49HWgcq0Ho4Or7D6q3jfpE7B1Sgk35QIHUgBVr1jeklm7H7mKwe/MrczNyTm1n2KTNyHwfFDvl2Mx7Yx/Ny1+zrgP8qEhX4CLQZ99K/q34vSR8k8+4iHXlW/VGxg5vrih3tp51F5a7u68idAS7Q0g0f9oPVJcmeWFtWD2blDsU0Vu6YvVbu2j9RR5GrAi+QHVDcg9STuUkZJNNs1ioNsxQ7ujnMjjzFriyT7haRBXJPMtZDk402uwLZB3/OHCrbIHcHvEDuSlA+M2VPCtz8VJ3C8h2T9eOP7QxX7EqB7hbximgnwmZsxxWrRjrq2FeqxXPxN7HzW2+7KwW6W+CvAxWn8akI7kk60phsO92e55db+8nRdlcKdLfgvTASBAUiQVAgEgQFIkFQIBIEBSJBUCASBAUiQVAgEgRUIEPeHKII1Pjqa3IBkDlKoEDKQOYogQIpA5mjhDYF+mML31/1IHOUQIGUgcxRAgVSBjJHCRRIGcgcJbCIVgYyRwkUSBnIHCVQIGUgc5RAgZSBzFECi2hlIHOUQIGUgcxRAgVSBjJHCRRIGcgcJVxQINP29/aNAJmjBAqkDGSOEiiQMpA5SrhkDUSDLgAyRwltCsQiOgLIHCVQIGUgc5RAgZSBzFHCRa8D7RhEgSKAzFFCmwKRCCBzlECBlCHNaHW7OLXL0phR5UHxtP6VFEgZuBTXjyfZD4bPHpRPKZBqTqfjforpwGmwNDe/Gq0ePTU/HdsX5vmPOi2xe2zen5QPqk+nvfLLLnsztW4Qi+gInE5n2UvWT2ar21ePJ9mP7HZ/bl/eLuyrSfaDdNO5yu6XTLcPyqer2xeDpPiyBQVSxul0Vv30xy87ZawR1oH8T3/ntwQeFKjvfplS8WUUSBmSfKwro12BXty4KiepjECHp7DPBhRILafTmbuhZFBOYYVAvfovpDhWRNuvvAqBSAQE8UyN6S6yIvofSoFeDc2Pd35TaXre7gqjvdP4ZfclBVLKWUFlcxIkawqkBHlK66E7nUdlfaE10TQoNsgcJbQpEIvoCCBzlECBlIHMUQIFUgYyRwkUSBnIHCWwiFYGMkcJFEgZm7EZub+Vb/z67xf7q3+m24uDdvdedoG6hmg50MXf2kyDIuPy3cm4ae3YsuvubGW3J5Y99/DJrL6HbDkQBdLDt8b86PX/Ds3N5/bvbJn9yuO+uflibLov3Q3QZD5Ilvmqn3n6NLtBmgo03b2mKFsO1KpALKKR/OWv//v1f/xdMQKt0lvt7v76vJc+fVlokC/RsCPQeJAt0XBTWDmunLkciAKp4VuX/N8UAqUeDDItMp8+maz+NtMjHWumpvPeoLTCfpyabm1uki0HokBq+PZH6aYQKJ2oqgItezb/ZbVSThcDFfOSHaEyXc5bDkSB1PCXv/qX//vn7RT21mQzTqewYunF+mc/myXZy0k6rFQq40yQaW01h2w5EItoPaRFdHkWti2iZ+thN1196Eafooiunsbns9TOFCZbDkSBtIHMUQIFUgYyRwkUSBnIHCWwiFYGMkcJFEgZyBwlXPzH/FYMokARQOYogQIpA5mjhDYFIhFA5iiBAikjv0JoP97M6gt93E/lGJWrMZamuziw4mf7Su1T+SqjlpdzUKDIZAt9sttWtYU+m/EgvStRCNQ7eLMiOXQfY0qB9FMu9CkEKhb6pC99/c3q9lX2U1x6B2+XJofupBYCtbkeiEV0ZPKFPvfcz3CpL/TpbT3Knh5asJEcWstxDeuBKFBksoU+yQ+LZF5f6AMTyHs9UDopzo2rztzT9TD9h9U3FKhtMmncRzeZVRb65OZUBPKdwjzXAy1Tcco1I25Zyby3s6FArZMt9HFDhhuBKgt90iJ6OAAU0X7rgaadj20T258H4op713Rtc55AJALb0/hBUl/ok/00jkoR3bjiJz9pa1wMVIxknuuBnCDuH7F9e1B+VrjduIYcFKg1TueYUVvcWuXT2YFPVKafCmcKZEvvfBSy1b5Tpr452ljWQQoUl9M5Zix3FyDmbD469BU7b1fcyVpaRDvKmqxpBDrcWNZBChSX0zli8RYIUAOxiI5AqBDncqZAbqrafOBEcUV9evpV3RxtLOsgBYoLwImz8LgO1JkU9bTPdaCKQRQoAggpzsHzSvSRUv1gY3kPKVBUzssxHD+BDpfqRxrLe8gqOipn5Qjg4vfCKFBckDlKoEDKQOYogQIpA5mjhDYFYhEdAWSOEiiQMpA5SqBAykDmKIECKQOZowQW0cpA5iiBAikDmaMECqQMZI4SKJAykDlKYBGtDGSOEiiQMpA5SqBAykDmKIECKQOZowQW0cpA5ijh8gLRoKggc5RAgZSBzFECBVIGMkcJbQrEIjoCyBwlUCBlIHOUQIGUgcxRAgVSBjJHCSyilYHMUQIFUgYyRwkUSBnIHCVQIGUgc5TAIloZyBwlUCBlIHOUQIGUgcxRAgVSBjJHCSyilYHMUQIFUgYyRwkUSBnIHCVQIGUgc5TAIloZyBwltCBQaRAFigAyRwkUSBnIHCVQIGUgc5TQpkAkAsgcJVAgZSBzlECBlIHMUQIFUgYyRwksopWBzFECBVIGMkcJFEgZyBwlUCBlIHOUwCJaGcgcJVAgZSBzlECBlIHMUQIFUgYyRwksopWBzFECBVIGMkcJFEgZyBwlUCBlIHOUwCJaGcgcJbQhEA2KCDJHCRRIGcgcJVAgZSBzlNCmQCyiI4DMUQIFUgYyRwkUSBnIHCVQIGUgc5TAIloZyBwlUCBlIHOUQIGUgcxRAgVSBjJHCSyilYHMUQIFUgYyRwkUSBnIHCVQIGUgc5TAIloZyBwlUCBlIHOUQIGUgcxRAgVSBjJHCSyilYHMUQIFUgYyRwkUSBnIHCW0IlBuEAWKADJHCU0Crd99NEuS79/tLgIbrVPpJavoaHhG5s2+QJuvftfv/PuzZ//Zv5nVdl09sM/XQ5N7lT+qb3Ybq1LpJQWKBtiPkzSMQFOTUx+BlsYKtRmPknnPPc0f1Tf7jVWo9JICRQMtyCkaBFo9Nebe22+//WhS3XHa+diOQOsns2wkKh7VN/uNVaj0kgJFA6/IcQ7XQHs4QVa3i2T92JmVP6pvXEOOxkNVeskiOhpYPU5z4Czshz9Zvqm/5gRadgtR8kf1TXNjOZVeUqBoIOWQ0CjQd/10HGkook+PQHuNlVR6SYGiAfbjJE0CbcZ5EbQvELQGokARQAtyisYaaNiZNOzqBNmMB+VZ2CA7/apuGhrbUukli+hooMSQ0jwC3RwqovPrPelgxOtA1whODRmNNdD66U9PXIT+tMmwvUbrVHpJgaIhjx7DnkB2KCloHIdSNh+JGq1T6SUFioaHA0H4CSRstE6llyyio+EZmTe8G68MZI4SGgVKLyNaIt+Np0AR8IzMm+bT+GISu+83iVGg9vAKLIDme2F907F/HhrTa/oacaN1qt1kFR0Lr8ACaJzCVv1fJMmLzmS1uyTozEbrVLtJgWLhk1cIhy8krofdV0MKdNfwySuEw7cy7PDzb55n8hSoPXzyCqFxCpsa8+hdY348jFsDsYiOgFdgATQK5G7HG2NnsFhnYRQoGl6BBXBoQdmzZ9/s7Xt2o3Wq3aRAsfBPzY92rkRToGggc5TQcC/s5vNh7HthLKKj4RmZNxRIGZ6RedPmFEYigMxRQrNAm9++9+iL3wc3WqfaTQoUC+/QPDlwK8POX58PB6GN1ql2k0V0LHwz8+XAhcSf9K1A8X64AgWKhmdk3jTfyrD2uD/xiujUIAoUAc/IvDks0B88b8UnFKhNPCPz5sAUdq/feeh5I2y3sZJaP1lFR8I3M1+O3AvzvBG221hJrZ8UKBK+mfly4DrQ18+e/Vd4o3Vq/aRAkfBPzY+GK9H3/jHAnXpjNWr9pECRCIzubA68LyxMIhbR7REQmxcNU9iffvtueivs3s/jXQeiQLHwjMybAzXQ5sunUW+mUqBYeEbmTaNAX//rw8h34ylQLDwj82ZPoM1vUnk67/zadwJjEd0m3qF50lhEP/ooYD1rQoHaJCg4DxoF6vwkYPhJKFCbhOTmw34N9NWH/dA5jAK1h29mvjTfyvgylShmEe0MYhEdAc/IvDmwIvGrX/Yp0J3EMzJv9gX64XfvFXNYaKN16h2lQHHwzcyX5lsZQSfxFKhNAmLzYl+gx2Hy1BqrUe8oq+g4BEZ3Ni29rYcCxQKZowQKpAxkjhIokDKQOUpoUyAW0RFA5iiBAikDmaMECqQMZI4SKJAykDlKYBGtDGSOEiiQMpA5SqBAykDmKIECKQOZo4TWBLIGsYiOADJHCRRIGcgcJVAgZSBzlECBlIHMUUKbApEIIHOUQIGUgcxRAgVSBjJHCRRIGcgcJbCIVgYyRwkUSBnIHCVQIGUgc5RAgZSBzFECi2hlIHOUQIGUgcxRAgVSBjJHCRRIGcgcJbCIVgYyRwkUSBnIHCW0J9BrQ4EigMxRAgVSBjJHCW0K1Mb3Vz3IHCVQIGUgc5RAgZSBzFECBVIGMkcJLKKVgcxRAgVSBjJHCRRIGcgcJVAgZSBzlMAiWhnIHCVQIGUgc5RAgZSBzFHCuQLNy18DtR6a7mJ3c6yx3a5SoBgE2eDBuQJNR/mDzXiUzHs7m6ON7XaVRXQM/FXw40yBNu9P8kfrJ7Nk9WBW3xxtbLerFCgGITL4cKZA6S+DSgeh1e0iWT+e1DeuIUfj1+71lQJFAODEWZwp0OqtST4KLbupMvXN0cb2+kqBIhAqxLn4nIWlddChEehwY3t9ZRUdgQAXvPAWKLwGokAxCHDBizMFclPV5gMnymY8yE6/qpujje31lQJFINCHs/G4DtSZpINN8HUgChSDQB/OxvNK9KdHfyM4i+j2OC/HcPwE2nwkarTOXl8pUATOyhFAi/fCKFAMkDlKoEDKQOYooU2BWERHAJmjBAqkDGSOEiiQMpA5SqBAykDmKIFFtDKQOUpoVSAOQXiQOUqgQMpA5iiBAikDmaOENgViFR0BZI4SKJAykDlKoEDKQOYogQIpA5mjBBbRykDmKIECKQOZowQKpAxkjhIokDKQOUpgEa0MZI4SKJAykDlKaFUgGoQHmaMECqQMZI4S2l0PRIHgIHOUQIGUgcxRAgVSBjJHCRRIGcgcJbCIVgYyRwkUSBnIHCVQIGUgc5RAgZSBzFECi2hlIHOUQIGUgcxRQsvvTKVBaJA5SqBAykDmKKHdIpoCwUHmKIECKQOZowQKpAxkjhIokDKQOUpgEa0MZI4SKJAykDlKaPsnlNEgMMgcJVAgZSBzlNByEU2B0CBzlECBlIHMUQIFUgYyRwkUSBnIHCW0XUTTIDDIHCVQIGUgc5RAgZSBzFECBVIGMkcJbRfRFAgMMkcJrQtEg7Agc5RAgZSBzFECBVIGMkcJrRfRFAgLMkcJFEgZyBwlUCBlIHOU0L5ANAgKMkcJ7RfRFAgKMkcJFEgZyBwlUCBlIHOUQIGUgcxRAotoZSBzlHAFAtEgJMgcJVAgZSBzlECBlIHMUcIVFNEUCAkyRwnXIBANAoLMUQIFUgYyRwkUSBnIHCVcQxFNgYAgc5RwFQLRIBzIHCVQIGUgc5RAgZSBzFHCVRTRNAgHMkcJFEgZyBwlXIlANAgFMkcJFEgZyBwlXEcRbTFUCAIyRwkogdZD013sNlpnr69/rD+lQQgCczwbkECb8SiZ93YbrbPX1x2BaBCCsBzPByTQ+sksWT2YHW1sr6+7AtEgAGE5ng9IoNXtIlk/nriGHI37CHpvyPUSVaBltxDocGPR//OR1wpGoMONtf2tfTMIy/F82qyBSATCcjwf2FnYIPwsjAAIy/F8rug6EEEQmOPZXM2VaIIBmaMECqQMZI4SruVmKgGBzFECBVIGMkcJFEgZyBwlUCBlIHOUwCJaGcgcJVAgZSBzlECBlIHMUQIFUgYyRwlxBCJvDjEEOqBV/EPwiK0dkQLxiEFHpEA8YtARL//vIKqgQCQICkSCoEAkCApEgoAKtF0gnT86trnEEVd9Y0ZJMjfG3MxONIU5Yn6oy/Vxnl7VG12kj0n2Dpzai0iBtm+Uzx8d21ziiO4da6u3Jsl0hDnc6SPmh7pgHx3u7Z0X6KM9kHO0/iJSoO2bxPJHxzaXOOLSdXo62rw/OdUQ6oj5oS7YR/e6/X9yiT4m087H9mP9RaRA27ep5o+ObS5xRLeL3dixNp3JLnDE/FCX7aMbHC7RxySbwuovIgXavlE+f3Rsc4kjJtk7H90shvofeuKI+aEu2sf0wyX6mGQC1V9UPgKth4N8V1CNIBjz7KEu2sdlWa5H7mMSewS6uhrInoWV31LQN/d0ReIOddEaaFr8H4ndxyQTKF4NtH2jfP7o2OYSR8z9cf9FNx9g4jxxxPxQF+xjPnFdoo9JJlD9xQjXgVJLL3od6NARK9dIOqiTlBN9zA91uT4WU+Ul+hj7OhB5A6FAJAgKRIKgQCQICkSCoEAkCApEgqBAJAgKRIKgQCQICkSCoEAkCAq0R7q4z5h3nruHnuvU551J09eu+oOmve8yFGiPXCB3c7smwQ+fiJfbrIe9ZvmmqDdOXA0UaI/10K2L+H5s6gt6NmP5muO53bVRoKXRNgRRoD0ygex0czNLJXjRN+b+c+uPMd3Fdw/tk3Ro+sNT9yDZfGiy7W/6pvOLrIXNOB+97GA2Wpr7H5r7s//pd0auUdgyoSuBAu2RC+QscBK4Nycac/NFKtDL7Mksn+a6i9Qr926pafrCIG8hfW+h+5qBHXQc99K9/Yuqq4UC7VEKZEYu72W+GK+cwlZDZ1aqhtPr5vlmagar/v3nyfe5Huk4Y5t56ISyez23Eo3ciJaNTaqgQHvsjEDrp3b8+Pk3uUCbL39pp6pJuo/77DyvlJZl4Z0+SQXKRiT3pJwOzymk7gYUaI9coKyGcUPKlx8+tGak2duB5tevik80CJTpUQh0zw06mUDdBQV6U8gEsvPS9lQ8zX2aLs/vJS9MRSA7tkySz0zPTWVlC/kU5vQa7ArEKUw9O9eBlsUTWyZ3P8uflAJlRXT22axOTrZF9My5WBOIRfQbwO6V6BfZmXvyXd90//yJ6fzTPKuus8+Wp/Gf2BO0d7Jz9PI03g4/vZpAPI0nEuaHKh1eSCQS3K2MRngrg4iYN9fKvJlKSB0KRIKgQCQICkSCoEAkCApEgqBAJIj/B0tej65xPv7wAAAAAElFTkSuQmCC" alt="Fitted Gaussian kernel with x-axis relabeled in kilometers." />
+<div class="figcaption"><strong><em>Fitted Gaussian kernel with x-axis
+relabeled in kilometers.</em></strong></div>
+</div>
+</div>
+<div id="step-5-compare-against-a-standard-fixed-raster-fit" class="section level3" number="3.6">
+<h3><span class="header-section-number">3.6</span> Step 5: Compare
+against a standard fixed-raster fit</h3>
+<p>The scale-aware fit is easiest to interpret when it is compared
+directly to the same model without an estimated <code>sigma</code>.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>fit_fixed <span class="ot">&lt;-</span> <span class="fu">terradish</span>(</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  melip.Fst <span class="sc">~</span> forestcover,</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">data =</span> surface,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>  <span class="at">measurement_model =</span> mlpe,</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  <span class="at">optimizer =</span> <span class="st">&quot;auto&quot;</span>,</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  <span class="at">leverage =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">NewtonRaphsonControl</span>(<span class="at">maxit =</span> <span class="dv">12</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>)</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a>fit_fixed</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a><span class="co">#&gt; Conductance surface estimated by maximum likelihood</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a><span class="co">#&gt; Call:   terradish(formula = melip.Fst ~ forestcover, data = surface, </span></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="co">#&gt;     conductance_model = loglinear_conductance, measurement_model = mlpe, </span></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt;     leverage = FALSE, optimizer = &quot;auto&quot;, control = NewtonRaphsonControl(maxit = 12, </span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a><span class="co">#&gt;         verbose = FALSE))</span></span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a><span class="co">#&gt; forestcover  </span></span>
+<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a><span class="co">#&gt;     0.05858  </span></span>
+<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a><span class="co">#&gt; Loglikelihood: 111.8835 (5 degrees freedom)   AIC: -213.767</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">aic_table</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="fu">list</span>(fit_gaussian, fit_fixed),</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="at">mod_names =</span> <span class="fu">c</span>(<span class="st">&quot;Gaussian scale-aware&quot;</span>, <span class="st">&quot;Fixed raster&quot;</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>)</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt;                  model K       AIC Delta_AIC AIC_wt Cum.wt   loglik</span></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; 2         Fixed raster 5 -213.7670    0.0000   0.73   0.73 111.8835</span></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co">#&gt; 1 Gaussian scale-aware 6 -211.7773    1.9897   0.27   1.00 111.8887</span></span></code></pre></div>
+<p>The two fits use the same response, sites, graph, and MLPE
+likelihood, so their AIC values have a common basis. The scale-aware
+model’s parameter count includes the estimated smoothing scale. In a
+larger analysis, declare the candidate scale and formula set before
+comparing it, and report the search that was performed.</p>
+<p>At this stage, the main question is not simply “which AIC is
+smaller?” A more useful question is:</p>
+<ul>
+<li>does <code>sigma.forestcover</code> stay away from the bounds?</li>
+<li>is the fitted smoothing scale distinguishable from the bounds and
+supported by the raster resolution and sampled domain?</li>
+<li>is the scale-aware fit at least competitive with the simpler
+fixed-raster version?</li>
+</ul>
+<p>If the answer is yes, then adding another raster is more
+defensible.</p>
+</div>
+<div id="step-6-summarize-the-one-raster-fit" class="section level3" number="3.7">
+<h3><span class="header-section-number">3.7</span> Step 6: Summarize the
+one-raster fit</h3>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">summary</span>(fit_gaussian)</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="co">#&gt; Conductance surface with 22443 vertices (8 focal) estimated by maximum likelihood</span></span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="co">#&gt; Call:   terradish(formula = melip.Fst ~ forestcover, data = surface, </span></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="co">#&gt;     conductance_model = gaussian_model, measurement_model = mlpe, </span></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="co">#&gt;     leverage = FALSE, optimizer = &quot;auto&quot;, control = NewtonRaphsonControl(maxit = 12, </span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt;         verbose = FALSE))</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="co">#&gt; Loglikelihood: 111.8887 (6 degrees freedom)</span></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="co">#&gt; AIC: -211.7773 </span></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="co">#&gt; Number of function calls: 20 </span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a><span class="co">#&gt; Number of optimization steps: 6 </span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="co">#&gt; Norm of gradient at MLE: 0.1032663 </span></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a><span class="co">#&gt; Nuisance parameters (conditional on fitted conductance surface; measurement-model scale):</span></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a><span class="co">#&gt;        Estimate   Std. Error  Lower 95%  Upper 95%</span></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="co">#&gt; alpha  -0.026019   0.009841   -0.045307  -0.006731</span></span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a><span class="co">#&gt; beta    0.248662   0.018696    0.212018   0.285306</span></span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a><span class="co">#&gt; tau     8.291282   0.421657    7.464850   9.117715</span></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a><span class="co">#&gt; rho     1.099652   0.664125   -0.202010   2.401314</span></span>
+<span id="cb13-21"><a href="#cb13-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-22"><a href="#cb13-22" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb13-23"><a href="#cb13-23" tabindex="-1"></a><span class="co">#&gt;                   Estimate Std. Error z value Pr(&gt;|z|)</span></span>
+<span id="cb13-24"><a href="#cb13-24" tabindex="-1"></a><span class="co">#&gt; forestcover       -0.01596    0.13201  -0.121    0.904</span></span>
+<span id="cb13-25"><a href="#cb13-25" tabindex="-1"></a><span class="co">#&gt; sigma.forestcover  0.02250    0.23218   0.097    0.923</span></span>
+<span id="cb13-26"><a href="#cb13-26" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-27"><a href="#cb13-27" tabindex="-1"></a><span class="co">#&gt; Correlation of Coefficients:</span></span>
+<span id="cb13-28"><a href="#cb13-28" tabindex="-1"></a><span class="co">#&gt;                   forestcover</span></span>
+<span id="cb13-29"><a href="#cb13-29" tabindex="-1"></a><span class="co">#&gt; sigma.forestcover   0.2476555</span></span></code></pre></div>
+<p>For this conductance model, the coefficient table includes both:</p>
+<ul>
+<li>the conductance coefficient, and</li>
+<li><code>sigma</code></li>
+</ul>
+<p>So the scale parameter is treated just like any other model parameter
+in the joint optimization.</p>
+</div>
+<div id="step-7-recover-the-fitted-conductance-surface" class="section level3" number="3.8">
+<h3><span class="header-section-number">3.8</span> Step 7: Recover the
+fitted conductance surface</h3>
+<p>Once the model is fitted, the usual conductance helper still
+works.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>fitted_conductance <span class="ot">&lt;-</span> <span class="fu">conductance</span>(surface, fit_gaussian)</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>fitted_conductance</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a><span class="co">#&gt; class       : SpatRaster</span></span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="co">#&gt; size        : 156, 180, 3  (nrow, ncol, nlyr)</span></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="co">#&gt; resolution  : 0.045, 0.045  (x, y)</span></span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="co">#&gt; extent      : -42.9125, -34.8125, -9.4975, -2.4775  (xmin, xmax, ymin, ymax)</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="co">#&gt; coord. ref. : +proj=longlat +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +no_defs</span></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a><span class="co">#&gt; source(s)   : memory</span></span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="co">#&gt; names       :      est,  lower95,  upper95</span></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="co">#&gt; min values  : 0.931681, 0.287812, 1.003959</span></span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a><span class="co">#&gt; max values  : 1.015255, 0.996511,   3.1499</span></span></code></pre></div>
+<p>And we can plot the fitted conductance layer directly:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">plot</span>(fitted_conductance[[<span class="dv">1</span>]], <span class="at">main =</span> <span class="st">&quot;Fitted conductance&quot;</span>)</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="fu">points</span>(coords, <span class="at">pch =</span> <span class="dv">19</span>, <span class="at">col =</span> <span class="st">&quot;red&quot;</span>)</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Fitted conductance surface from the Gaussian scale-aware model, with sampling sites shown in red." src="data:image/png;base64,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" alt="Fitted conductance surface from the Gaussian scale-aware model, with sampling sites shown in red." />
+<div class="figcaption"><strong><em>Fitted conductance surface from the
+Gaussian scale-aware model, with sampling sites shown in
+red.</em></strong></div>
+</div>
+<p>When tails are weakly supported at focal sites, you can request
+focal-support clamping directly in prediction:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>fitted_conductance_focal <span class="ot">&lt;-</span> <span class="fu">conductance</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  surface,</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  fit_gaussian,</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">support =</span> <span class="st">&quot;focal&quot;</span>,</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>  <span class="at">support_probs =</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.99</span>),</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>  <span class="at">clamp_covariates =</span> <span class="st">&quot;forestcover&quot;</span></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a>)</span></code></pre></div>
+<hr />
+</div>
+</div>
+<div id="stage-2-add-a-second-raster-only-after-sigma-looks-sensible" class="section level2" number="4">
+<h2><span class="header-section-number">4</span> Stage 2: Add a second
+raster only after sigma looks sensible</h2>
+<p>Once the one-raster scale parameter looks stable enough to trust, we
+can add a second raster and inspect whether the scale estimates remain
+interpretable.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>covariates_two <span class="ot">&lt;-</span> <span class="fu">c</span>(melip.altitude, melip.forestcover)</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a><span class="fu">names</span>(covariates_two) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;altitude&quot;</span>, <span class="st">&quot;forestcover&quot;</span>)</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>surface_two <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  covariates_two,</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  coords,</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>  <span class="at">directions =</span> <span class="dv">8</span>,</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>  <span class="at">saveStack =</span> <span class="cn">TRUE</span></span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>fit_gaussian_two <span class="ot">&lt;-</span> <span class="fu">terradish</span>(</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  melip.Fst <span class="sc">~</span> forestcover <span class="sc">+</span> altitude,</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>  <span class="at">data =</span> surface_two,</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>  <span class="at">conductance_model =</span> <span class="fu">gaussian_smoothed_loglinear_conductance</span>(surface_two),</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>  <span class="at">measurement_model =</span> mlpe,</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>  <span class="at">optimizer =</span> <span class="st">&quot;auto&quot;</span>,</span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>  <span class="at">leverage =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">NewtonRaphsonControl</span>(<span class="at">maxit =</span> <span class="dv">12</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>)</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a>fit_gaussian_two</span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a><span class="co">#&gt; Conductance surface estimated by maximum likelihood</span></span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a><span class="co">#&gt; Call:   terradish(formula = melip.Fst ~ forestcover + altitude, data = surface_two, </span></span>
+<span id="cb18-14"><a href="#cb18-14" tabindex="-1"></a><span class="co">#&gt;     conductance_model = gaussian_smoothed_loglinear_conductance(surface_two), </span></span>
+<span id="cb18-15"><a href="#cb18-15" tabindex="-1"></a><span class="co">#&gt;     measurement_model = mlpe, leverage = FALSE, optimizer = &quot;auto&quot;, </span></span>
+<span id="cb18-16"><a href="#cb18-16" tabindex="-1"></a><span class="co">#&gt;     control = NewtonRaphsonControl(maxit = 12, verbose = FALSE))</span></span>
+<span id="cb18-17"><a href="#cb18-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb18-18"><a href="#cb18-18" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb18-19"><a href="#cb18-19" tabindex="-1"></a><span class="co">#&gt;       forestcover           altitude  sigma.forestcover     sigma.altitude  </span></span>
+<span id="cb18-20"><a href="#cb18-20" tabindex="-1"></a><span class="co">#&gt;          -0.24277           -0.38872            0.04884            0.02250  </span></span>
+<span id="cb18-21"><a href="#cb18-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb18-22"><a href="#cb18-22" tabindex="-1"></a><span class="co">#&gt; Loglikelihood: 117.1025 (8 degrees freedom)   AIC: -218.205</span></span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">gaussian_scale_summary</span>(fit_gaussian_two)</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a><span class="co">#&gt;     covariate      sigma sigma_lower sigma_upper sigma_internal</span></span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a><span class="co">#&gt; 1 forestcover 0.04883804          NA          NA        1.08529</span></span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a><span class="co">#&gt; 2    altitude 0.02250000          NA          NA        0.50000</span></span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="co">#&gt;   sigma_conversion sigma_conversion_mode native_unit sigma_cells_x</span></span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a><span class="co">#&gt; 1            0.045                  cell     degrees       1.08529</span></span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a><span class="co">#&gt; 2            0.045                  cell     degrees       0.50000</span></span>
+<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a><span class="co">#&gt;   sigma_cells_y    axis_50  radial_50    axis_95 radial_95</span></span>
+<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a><span class="co">#&gt; 1       1.08529 0.03294076 0.05750239 0.09572079 0.1195432</span></span>
+<span id="cb19-10"><a href="#cb19-10" tabindex="-1"></a><span class="co">#&gt; 2       0.50000 0.01517602 0.02649173 0.04409919 0.0550743</span></span></code></pre></div>
+<p>This is exactly the point where the staged workflow helps. If one or
+more sigma estimates now collapse to the lower bound, or drift toward
+the upper bound, that is useful information. It suggests one of several
+things:</p>
+<ul>
+<li>the added raster may not need smoothing at all</li>
+<li>the data may not support estimating multiple scales
+simultaneously</li>
+<li>the smaller one-raster scale was not as stable as it first
+appeared</li>
+</ul>
+<p>That does <strong>not</strong> mean the model failed. It means the
+scale parameters are telling you that the data may prefer a simpler
+spatial structure.</p>
+<p>In the small <code>melip</code> subset used here, that is exactly the
+kind of pattern to watch for: the one-raster <code>forestcover</code>
+scale can be inspected on its own before adding <code>altitude</code>.
+After <code>altitude</code> is added, one or both fitted scale
+parameters may move toward the lower bound, which is a cue to proceed
+cautiously rather than immediately adding more landscape terms.</p>
+<hr />
+</div>
+<div id="important-current-limitations" class="section level2" number="5">
+<h2><span class="header-section-number">5</span> Important current
+limitations</h2>
+<p>This first version is intentionally focused. Right now it
+supports:</p>
+<ul>
+<li>additive formulas made of raw numeric raster names</li>
+<li>interactions among numeric raster names</li>
+<li>polynomial/arithmetic terms such as
+<code>I(forestcover^2)</code></li>
+<li>one Gaussian scale parameter per selected raster</li>
+<li>joint optimization through analytic gradients and BFGS</li>
+<li>opt-in coarse-raster starts through
+<code>approximation = &quot;coarse_raster&quot;</code></li>
+</ul>
+<p>It does <strong>not yet</strong> support:</p>
+<ul>
+<li>factor-valued raster layers</li>
+<li>leverage / <code>partial_X</code> diagnostics</li>
+</ul>
+<p>It does now support conditional-on-sigma marginal-association
+plotting, so you can inspect conductance and response-scale curves after
+fitting, but the leverage machinery is still intentionally disabled.</p>
+<hr />
+</div>
+<div id="where-to-go-with-your-analysis" class="section level2" number="6">
+<h2><span class="header-section-number">6</span> Where to go with your
+analysis</h2>
+<p>If this workflow looks reasonable for your data, practical steps
+are:</p>
+<ol style="list-style-type: decimal">
+<li>Fit a small one-raster model first and inspect
+<code>sigma</code>.</li>
+<li>Compare it to a standard fixed-raster
+<code>loglinear_conductance</code> fit.</li>
+<li>Add additional rasters only after the one-raster scale parameter
+behaves sensibly.</li>
+<li>Treat boundary-hitting sigma estimates as a model-selection signal,
+not just an optimization nuisance.</li>
+<li>Reproject rasters before interpreting smoothing distances, because
+longitude/latitude rasters report sigma in degrees.</li>
+</ol>
+<p>This staged approach makes it easier to assess whether the likelihood
+identifies an interior Gaussian smoothing scale under the fitted model.
+An identified smoothing scale is not, by itself, an identified movement
+or ecological-process scale.</p>
+<hr />
+</div>
+<div id="quick-reference-the-full-scale-optimization-workflow" class="section level2" number="7">
+<h2><span class="header-section-number">7</span> Quick reference: the
+full scale-optimization workflow</h2>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a><span class="co"># 1. Build the surface from the ORIGINAL raster; do not pre-smooth it</span></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covariates, coords, <span class="at">directions =</span> <span class="dv">8</span>,</span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a>                               <span class="at">saveStack =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb20-6"><a href="#cb20-6" tabindex="-1"></a></span>
+<span id="cb20-7"><a href="#cb20-7" tabindex="-1"></a><span class="co"># 2. Scale-aware conductance model: sigma is estimated, not fixed. The model</span></span>
+<span id="cb20-8"><a href="#cb20-8" tabindex="-1"></a><span class="co">#    is built from the surface itself; sigma_upper bounds the search in map</span></span>
+<span id="cb20-9"><a href="#cb20-9" tabindex="-1"></a><span class="co">#    units, and defaults to the retained raster extent&#39;s diagonal when left NULL.</span></span>
+<span id="cb20-10"><a href="#cb20-10" tabindex="-1"></a>cm <span class="ot">&lt;-</span> <span class="fu">gaussian_smoothed_loglinear_conductance</span>(surface)</span>
+<span id="cb20-11"><a href="#cb20-11" tabindex="-1"></a></span>
+<span id="cb20-12"><a href="#cb20-12" tabindex="-1"></a><span class="co"># 3. Fit; theta and sigma.&lt;layer&gt; are estimated jointly</span></span>
+<span id="cb20-13"><a href="#cb20-13" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(melip.Fst <span class="sc">~</span> altitude, <span class="at">data =</span> surface,</span>
+<span id="cb20-14"><a href="#cb20-14" tabindex="-1"></a>                 <span class="at">conductance_model =</span> cm, <span class="at">measurement_model =</span> mlpe)</span>
+<span id="cb20-15"><a href="#cb20-15" tabindex="-1"></a></span>
+<span id="cb20-16"><a href="#cb20-16" tabindex="-1"></a><span class="co"># 4. Read the fitted scale. `sigma` is in map units, so reproject a</span></span>
+<span id="cb20-17"><a href="#cb20-17" tabindex="-1"></a><span class="co">#    longitude/latitude raster first or it will be reported in degrees.</span></span>
+<span id="cb20-18"><a href="#cb20-18" tabindex="-1"></a><span class="fu">gaussian_scale_summary</span>(fit)   <span class="co"># sigma + kernel-mass distances in map units</span></span>
+<span id="cb20-19"><a href="#cb20-19" tabindex="-1"></a></span>
+<span id="cb20-20"><a href="#cb20-20" tabindex="-1"></a><span class="co"># 5. Sanity check against a fixed-raster fit of the same covariate</span></span>
+<span id="cb20-21"><a href="#cb20-21" tabindex="-1"></a>fit_fixed <span class="ot">&lt;-</span> <span class="fu">terradish</span>(melip.Fst <span class="sc">~</span> altitude, <span class="at">data =</span> surface,</span>
+<span id="cb20-22"><a href="#cb20-22" tabindex="-1"></a>                       <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb20-23"><a href="#cb20-23" tabindex="-1"></a>                       <span class="at">measurement_model =</span> mlpe)</span>
+<span id="cb20-24"><a href="#cb20-24" tabindex="-1"></a><span class="fu">aic_table</span>(<span class="fu">list</span>(fit, fit_fixed),</span>
+<span id="cb20-25"><a href="#cb20-25" tabindex="-1"></a>          <span class="at">mod_names =</span> <span class="fu">c</span>(<span class="st">&quot;Scale-aware&quot;</span>, <span class="st">&quot;Fixed raster&quot;</span>))</span>
+<span id="cb20-26"><a href="#cb20-26" tabindex="-1"></a></span>
+<span id="cb20-27"><a href="#cb20-27" tabindex="-1"></a><span class="co"># 6. Recover the conductance surface at the estimated scale</span></span>
+<span id="cb20-28"><a href="#cb20-28" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">conductance</span>(surface, fit))</span></code></pre></div>
+</div>
+<div id="summary-of-key-functions" class="section level2" number="8">
+<h2><span class="header-section-number">8</span> Summary of key
+functions</h2>
+<table>
+<colgroup>
+<col width="52%" />
+<col width="47%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>conductance_surface()</code></td>
+<td>Build the graph from the original, unsmoothed raster</td>
+</tr>
+<tr class="even">
+<td><code>gaussian_smoothed_loglinear_conductance()</code></td>
+<td>Conductance model that estimates sigma jointly with theta</td>
+</tr>
+<tr class="odd">
+<td><code>terradish()</code></td>
+<td>Fit the scale-aware model</td>
+</tr>
+<tr class="even">
+<td><code>gaussian_scale_summary()</code></td>
+<td>Fitted sigma per layer and corresponding Gaussian kernel-mass
+distances</td>
+</tr>
+<tr class="odd">
+<td><code>conductance()</code></td>
+<td>Extract the fitted conductance surface at the estimated scale</td>
+</tr>
+<tr class="even">
+<td><code>aic_table()</code></td>
+<td>Compare the scale-aware fit against a fixed-raster fit</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="see-also" class="section level2" number="9">
+<h2><span class="header-section-number">9</span> See also</h2>
+<ul>
+<li><strong><code>vignette(&quot;getting-started&quot;, package = &quot;terradish&quot;)</code></strong>:
+the core <code>terradish</code> workflow: scaling covariates, building a
+conductance surface, fitting and interpreting models, and the five plot
+types.</li>
+<li><strong><code>vignette(&quot;model-comparison&quot;, package = &quot;terradish&quot;)</code></strong>:
+likelihood ratio tests, AIC/AICc/BIC tables, likelihood surface
+visualization, and cross-validation.</li>
+<li><strong><code>vignette(&quot;ibe-ibr-workflow&quot;, package = &quot;terradish&quot;)</code></strong>:
+fitting isolation by environment (IBE) and isolation by resistance (IBR)
+simultaneously in the same model.</li>
+<li><strong><code>vignette(&quot;spline-conductance&quot;, package = &quot;terradish&quot;)</code></strong>:
+fitting non-linear conductance responses with spline terms when the
+response shape is flexible but the raster scale is fixed.</li>
+<li><strong><code>vignette(&quot;wishart-covariance&quot;, package = &quot;terradish&quot;)</code></strong>:
+fitting covariance-based Wishart IBR models when raw genotype data are
+available.</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

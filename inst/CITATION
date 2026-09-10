@@ -1,0 +1,12 @@
+citHeader("To cite terradish in publications, use:")
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "terradish: Fast Gradient-Based Optimization of Resistance Surfaces",
+  author   = c(person("Bill", "Peterman"),
+               person(c("Nathaniel", "S."), "Pope")),
+  year     = sub("-.*", "", meta$Date),
+  note     = paste("R package version", meta$Version),
+  doi      = "10.5281/zenodo.21225712",
+  url      = "https://doi.org/10.5281/zenodo.21225712"
+)

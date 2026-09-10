@@ -1,0 +1,372 @@
+#' Generalized Wishart distance regression
+#'
+#' A function of class \code{"terradish_measurement_model"} that evaluates the
+#' generalized Wishart likelihood for an admissible pairwise genetic
+#' squared-distance matrix. This model requires a distance representation
+#' that is coherently related to a centered positive semidefinite covariance
+#' matrix; it is not valid for an arbitrary dissimilarity matrix. The effective
+#' marker degrees of freedom must also be supplied. For covariance-matrix data,
+#' use \code{\link{wishart_covariance}}.
+#'
+#' @param E Conductance-implied covariance matrix: the generalized inverse of
+#'   the graph Laplacian at the current conductance parameters.  Passed
+#'   automatically by the optimizer.
+#' @param S Square, symmetric admissible genetic squared-distance matrix with
+#'   zero diagonal. It must have the same dimensions as \code{E}
+#'   and must correspond to a centered positive semidefinite covariance
+#'   representation under the scaling used to construct it.
+#' @param phi Named numeric vector of nuisance parameters \code{(tau, sigma)}.
+#'   Omit to obtain default starting values \code{c(1, 0)}.
+#' @param nu Positive number.  Effective Wishart degrees of freedom for
+#'   \code{S}.  Must be supplied; it is not estimated.  Pass via the \code{nu}
+#'   argument of \code{\link{terradish}}.
+#'
+#'   \emph{For biallelic SNPs:} use the number of retained polymorphic SNPs
+#'   (reduced for linkage disequilibrium if markers are not independent).
+#'
+#'   \emph{For microsatellites:} use the number of loci as the conservative
+#'   primary value. Allele frequencies within a locus are correlated because they
+#'   sum to a constant, so individual alleles are not independent observations in the
+#'   Wishart sense. The locus count \eqn{L} is the more defensible primary
+#'   choice. \eqn{\sum_l (K_l - 1)}, where \eqn{K_l} is the number of observed
+#'   alleles at locus \eqn{l}, can be examined as a larger sensitivity value,
+#'   but it should not be described as the known effective degrees of freedom.
+#'   Report the primary value and the full sensitivity analysis.
+#' @param gradient Logical. Compute gradient of the negative log-likelihood
+#'   with respect to \code{phi}?
+#' @param hessian Logical. Compute Hessian with respect to \code{phi}?
+#' @param partial Logical. Compute second partial derivatives with respect to
+#'   \code{phi}, \code{E}, and \code{S}?
+#' @param nonnegative Unused; present for interface consistency.
+#' @param validate Logical. Numerically validate gradients and Hessians via
+#'   \pkg{numDeriv}? Very slow; for debugging small examples only.
+#'
+#' @details
+#' The nuisance parameters are:
+#' \describe{
+#'   \item{\code{tau}}{Nonnegative scale applied to the conductance-implied
+#'     covariance \code{E}. A \code{tau} near zero signals no detectable
+#'     contribution from conductance-implied covariance under this model.}
+#'   \item{\code{sigma}}{Log-scale identity component: the nugget variance
+#'     added to the diagonal is \eqn{\exp(\sigma)}. It represents diagonal
+#'     variance not captured by the graph covariance, including sampling
+#'     variation and model mismatch. It is not a smoothing scale or a direct
+#'     estimate of genetic drift or population size.}
+#' }
+#'
+#' The fitted covariance is \eqn{\Sigma = \tau E + \exp(\sigma) I}.  The model
+#' evaluates the generalized Wishart log-likelihood for the observed
+#' admissible squared-distance matrix \code{S} after projecting out the grand mean, as
+#' described in McCullagh (2009).
+#'
+#' \code{generalized_wishart} and \code{\link{wishart_covariance}} share the
+#' same \eqn{\Sigma} parameterization but differ in what \code{S} represents:
+#' this function takes a \strong{squared-distance} matrix; \code{wishart_covariance}
+#' takes a \strong{covariance} matrix.  When the covariance and its implied
+#' distance representation carry the same information under the same centering,
+#' scaling, sites, and \code{nu}, the two models give likelihoods that differ
+#' only by a data-dependent constant. This equivalence does not make AIC values
+#' from arbitrary distance and covariance fits interchangeable.
+#'
+#' \strong{The role of \code{nu} (read this before choosing a value).}
+#' The generalized Wishart log-likelihood scales linearly with \code{nu}, so
+#' \code{nu} acts as an \emph{effective sample size} rather than as an ordinary
+#' model parameter:
+#' \itemize{
+#'   \item \strong{Point estimates do not depend on \code{nu}.}  The maximizing
+#'     conductance parameters \eqn{\theta} and nuisance parameters
+#'     \eqn{(\tau, \sigma)} are invariant to \code{nu}, because scaling the
+#'     objective by a positive constant does not move its optimum.
+#'   \item \strong{Standard errors scale as} \eqn{1/\sqrt{\nu}}: larger
+#'     effective degrees of freedom give tighter confidence intervals.
+#'   \item \strong{Model selection and likelihood-ratio tests depend strongly
+#'     on \code{nu}.}  Because the log-likelihood scales with \code{nu} while
+#'     the AIC/BIC penalty (and the \eqn{\chi^2} reference distribution) does
+#'     not, the same data can favor a simpler or a more complex model purely
+#'     through the choice of \code{nu}.
+#' }
+#' For biallelic SNPs, set \code{nu} to the retained polymorphic SNP count,
+#' reduced for linkage disequilibrium.  For microsatellites, use the number of
+#' loci \eqn{L} as a conservative primary value: within-locus allele frequencies
+#' are correlated, so \eqn{\sum_l (K_l - 1)} can yield over-confident inference
+#' if treated as independent information. Examine larger plausible values in a
+#' sensitivity analysis. See \code{\link{wishart_covariance}}
+#' for the same discussion in the covariance-response setting.
+#'
+#' The function checks \code{S} with \code{\link{check_distance_response}}
+#' before evaluating the likelihood. Substantive violations stop the fit. Tiny
+#' structural deviations within the numerical tolerance are symmetrized and
+#' set to zero where appropriate. No Euclidean correction is applied.
+#'
+#' @references
+#' McCullagh P. 2009. Marginal likelihood for distance matrices. Statistica
+#' Sinica 19:631-649.
+#'
+#' @seealso \code{\link{check_distance_response}},
+#'   \code{\link{wishart_covariance}}, \code{\link{wishart_covariates}},
+#'   \code{\link{wishart_drift_covariates}}, \code{\link{mlpe}},
+#'   \code{\link{terradish}}
+#'
+#' @return When \code{phi} is missing, a list with elements \code{phi}
+#'   (starting values \code{c(tau = 1, sigma = 0)}), \code{lower}
+#'   (\code{c(0, -Inf)}), and \code{upper}.  Otherwise a list containing:
+#'  \item{objective}{Negative log-likelihood.}
+#'  \item{fitted}{Matrix of expected squared genetic distances.}
+#'  \item{boundary}{Logical; \code{TRUE} if \code{tau = 0}, indicating no detectable IBR signal.}
+#'  \item{gradient}{Gradient with respect to \code{phi} (if \code{gradient = TRUE}).}
+#'  \item{hessian}{Hessian matrix with respect to \code{phi} (if \code{hessian = TRUE}).}
+#'  \item{gradient_E}{Gradient with respect to \code{E} (if \code{partial = TRUE}).}
+#'  \item{partial_E}{Jacobian of \code{gradient_E} with respect to \code{phi} (if \code{partial = TRUE}).}
+#'  \item{partial_S}{Jacobian of \code{gradient} with respect to the lower triangle of \code{S} (if \code{partial = TRUE}).}
+#'  \item{jacobian_E}{Function for reverse-mode AD through \code{E} (if \code{partial = TRUE}).}
+#'  \item{jacobian_S}{Function for reverse-mode AD through \code{S} (if \code{partial = TRUE}).}
+#'
+#' @examples
+#'
+#' library(terra)
+#' 
+#' data(melip)
+#' melip.altitude <- terra::unwrap(melip.altitude)
+#' melip.forestcover <- terra::unwrap(melip.forestcover)
+#' melip.coords <- terra::unwrap(melip.coords)
+#' 
+#' covariates <- c(melip.altitude, melip.forestcover)
+#' names(covariates) <- c("altitude", "forestcover")
+#' surface <- conductance_surface(covariates, melip.coords, directions = 8)
+#'
+#' # Inverse of the graph Laplacian at the null conductance model.
+#' laplacian_inv <- terradish_distance(theta = matrix(0, 1, 2), 
+#'                                  formula = ~forestcover + altitude,
+#'                                  data = surface,
+#'                                  terradish::loglinear_conductance, 
+#'                                  covariance = TRUE)$covariance[,,1]
+#'
+#' # Generate an admissible squared-distance response from a PSD covariance.
+#' Sigma <- 0.8 * laplacian_inv + 0.2 * diag(nrow(laplacian_inv))
+#' observed_covariance <- rWishart(1, df = 40, Sigma = Sigma)[, , 1] / 40
+#' observed_squared_distance <- dist_from_cov(observed_covariance)
+#' generalized_wishart(laplacian_inv, observed_squared_distance, nu = 40,
+#'                     phi = c(tau = 0.8, sigma = log(0.2)))
+#'
+#' @export
+
+generalized_wishart <- function(E, S, phi, nu, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
+{
+  symm <- function(X) (X + t(X))/2
+
+  if (missing(phi)) #return starting values and boundaries for optimization of phi
+  {
+    return(list(phi = c(1, 0), lower = c(0, -Inf), upper = c(Inf, Inf)))
+  }
+  else if (!(is.matrix(E)    & 
+             is.matrix(S)    & 
+             all(dim(E)  == dim(S)) &
+             is.numeric(phi) & 
+             length(phi) == 2 ))
+    stop ("invalid inputs")
+  if (anyNA(E) || anyNA(S) || anyNA(phi))
+    stop("missing values are not supported")
+
+  S <- .prepare_gw_response(S)
+
+  stopifnot(nu > 0)
+
+  names(phi) <- c("tau", "sigma")
+  tau   <- phi["tau"]
+  sigma <- exp(phi["sigma"])
+
+  # density is undefined if tau is negative
+  stopifnot(tau >= 0)
+  nonnegative <- TRUE
+
+  ones      <- matrix(1, nrow(S), 1)
+  I         <- diag(nrow(S))
+  Sigma     <- tau * E + sigma * I
+  SigInvOne <- solve(Sigma, ones)
+
+  W        <- I - ones %*% solve(t(ones) %*% SigInvOne) %*% t(SigInvOne)
+  SigInvW  <- solve(Sigma, W)
+  eigSigW  <- eigen(SigInvW)
+  P        <- eigSigW$vectors[,-nrow(Sigma)]
+  D        <- diag(eigSigW$values[-nrow(Sigma)])
+  ginvSigW <- P %*% solve(D) %*% t(P)
+
+  loglik <- nu/4 * sum(diag(SigInvW %*% S)) + nu/2 * sum(log(diag(D)))
+
+  fitted <- diag(Sigma) %*% t(ones) + ones %*% t(diag(Sigma)) - 2 * Sigma
+
+  if (gradient || hessian || partial)
+  {
+    dPhi    <- matrix(0, length(phi), 1)
+    ddPhi   <- matrix(0, length(phi), length(phi))
+    ddEdPhi <- matrix(0, length(E),   length(phi))
+    ddPhidS <- matrix(0, length(phi), sum(lower.tri(S)))
+    rownames(dPhi) <- colnames(ddPhi) <- 
+      rownames(ddPhi) <- colnames(ddEdPhi) <- 
+        rownames(ddPhidS) <- names(phi)
+
+    grad_Sigma <- -nu/2 * SigInvW - nu/4 * SigInvW %*% S %*% t(SigInvW)
+
+    # gradient, phi
+    dPhi["tau",]   <- sum(E * grad_Sigma) 
+    dPhi["sigma",] <- sum(diag(grad_Sigma)) * sigma
+
+    if (hessian || partial)
+    {
+      # see Golub GH, Pereyra V. 1973. The Differentiation of Pseudo-Inverses and Nonlinear Least Squares Problems Whose Variables Separate. SIAM Journal on Numerical Analysis 10(2): 413-432
+      # ^^actually unnecessary
+      dSigInvW_dtau <- -solve(Sigma, E %*% SigInvW)
+      dSigInvW_dsigma <- -solve(Sigma, SigInvW)
+
+      dW_correction_dtau <- ones %*% solve(t(ones) %*% solve(Sigma) %*% ones) %*% t(ones) %*% solve(Sigma) %*% E %*% solve(Sigma) +
+        -c(t(ones) %*% solve(Sigma) %*% E %*% solve(Sigma) %*% ones) * c(solve(t(ones) %*% solve(Sigma) %*% ones)^2) * ones %*% t(ones) %*% solve(Sigma)
+      #dgrad_dtau <- -0.5 * nu * dSigInvW_dtau - 0.25 * nu * dSigInvW_dtau %*% S %*% t(SigInvW) -
+      #               0.25 * nu * SigInvW %*% S %*% t(dSigInvW_dtau)
+      dgrad_dtau <- -0.5 * nu * dSigInvW_dtau %*% W - 0.25 * nu * dSigInvW_dtau %*% S %*% t(SigInvW) -
+                       0.5 * nu * W %*% dSigInvW_dtau - 0.25 * nu * SigInvW %*% S %*% t(dSigInvW_dtau) +
+                       0.5 * nu * W %*% dSigInvW_dtau %*% W
+      dgrad_dtau <- -0.5 * nu * solve(Sigma) %*% dW_correction_dtau -
+        nu/4 * solve(Sigma) %*% dW_correction_dtau %*% S %*% t(W) %*% solve(Sigma) -
+        nu/4 * solve(Sigma) %*% W %*% S %*% t(dW_correction_dtau) %*% solve(Sigma) + dgrad_dtau
+      
+      dW_correction_dsigma <- ones %*% solve(t(ones) %*% solve(Sigma) %*% ones) %*% t(ones) %*% solve(Sigma) %*% solve(Sigma) +
+        -c(t(ones) %*% solve(Sigma) %*% solve(Sigma) %*% ones) * c(solve(t(ones) %*% solve(Sigma) %*% ones)^2) * ones %*% t(ones) %*% solve(Sigma)
+      dgrad_dsigma <- -0.5 * nu * dSigInvW_dsigma %*% W - 0.25 * nu * dSigInvW_dsigma %*% S %*% t(SigInvW) -
+                       0.5 * nu * W %*% dSigInvW_dsigma - 0.25 * nu * SigInvW %*% S %*% t(dSigInvW_dsigma) +
+                       0.5 * nu * W %*% dSigInvW_dsigma %*% W
+      dgrad_dsigma <- -0.5 * nu * solve(Sigma) %*% dW_correction_dsigma -
+        nu/4 * solve(Sigma) %*% dW_correction_dsigma %*% S %*% t(W) %*% solve(Sigma) -
+        nu/4 * solve(Sigma) %*% W %*% S %*% t(dW_correction_dsigma) %*% solve(Sigma) + dgrad_dsigma
+      dgrad_dsigma <- dgrad_dsigma * sigma
+
+      # hessian, phi x phi
+      ddPhi["tau","tau"] <- sum(E * dgrad_dtau)
+      ddPhi["tau","sigma"] <- sum(E * dgrad_dsigma)
+      ddPhi["sigma","sigma"] <- sigma * sum(diag(dgrad_dsigma)) + dPhi["sigma",]
+      ddPhi <- ddPhi + t(ddPhi)
+      diag(ddPhi) <- diag(ddPhi)/2
+
+      if(partial)
+      {
+        # gradient wrt E
+        dE <- tau * grad_Sigma
+
+        # hessian offdiagonal, E x phi
+        ddEdPhi[,"tau"] <- grad_Sigma + tau * dgrad_dtau
+        ddEdPhi[,"sigma"] <- dgrad_dsigma * tau
+
+        # hessian offdiagonal, S x phi
+        ddtaudS <- -nu/4 * SigInvW %*% E %*% t(SigInvW)
+        ddsigmadS <- -nu/4 * SigInvW %*% t(SigInvW) * sigma
+        ddPhidS["tau",] <- ddtaudS[lower.tri(ddtaudS)]
+        ddPhidS["sigma",] <- ddsigmadS[lower.tri(ddsigmadS)]
+
+        # jacobian products (label these properly)
+        jacobian_E <- function(dE)
+        {
+          dE <- symm(dE)
+          dSigInvW_dE <- -solve(Sigma, dE %*% SigInvW)
+          dW_correction_dE <- ones %*% solve(t(ones) %*% solve(Sigma) %*% ones) %*% t(ones) %*% solve(Sigma) %*% dE %*% solve(Sigma) +
+            -c(t(ones) %*% solve(Sigma) %*% dE %*% solve(Sigma) %*% ones) * c(solve(t(ones) %*% solve(Sigma) %*% ones)^2) * ones %*% t(ones) %*% solve(Sigma)
+          dgrad_dE <- -0.5 * nu * dSigInvW_dE - 0.25 * nu * dSigInvW_dE %*% S %*% t(SigInvW) -
+            0.25 * nu * SigInvW %*% S %*% t(dSigInvW_dE)
+          dgrad_dE <- -0.5 * nu * solve(Sigma) %*% dW_correction_dE -
+            nu/4 * solve(Sigma) %*% dW_correction_dE %*% S %*% t(W) %*% solve(Sigma) -
+            nu/4 * solve(Sigma) %*% W %*% S %*% t(dW_correction_dE) %*% solve(Sigma) + dgrad_dE
+          -dgrad_dE * tau^2
+        }
+
+        jacobian_S <- function(dE)
+        {
+          dE <- symm(dE)
+          dEdS <- -nu/4 * t(SigInvW) %*% dE %*% SigInvW * tau
+          diag(dEdS) <- 0
+          -dEdS
+        } 
+      }
+    }
+  }
+
+  if (validate)
+  {
+    arg <- num_gradient <- .numderiv_jacobian(function(x) 
+                                   generalized_wishart(E = E, 
+                                        phi = x, 
+                                        nu = nu,
+                                        S = S)$grSig, 
+                                   phi)
+    num_gradient <- .numderiv_grad(function(x) 
+                                   generalized_wishart(E = E, 
+                                        phi = x, 
+                                        nu = nu,
+                                        S = S)$objective, 
+                                   phi)
+
+    num_hessian <- .numderiv_jacobian(function(x) 
+                                     generalized_wishart(E = E, 
+                                          phi = x, 
+                                          nu = nu,
+                                          S = S)$gradient, 
+                                     phi)
+
+    num_gradient_E <- symm(matrix(.numderiv_grad(function(x) 
+                                                 generalized_wishart(E = x, 
+                                                      phi = phi, 
+                                                      nu = nu,
+                                                      S = S)$objective, 
+                                                 E), 
+                                  nrow(E), ncol(E)))
+
+    num_partial_E <- .numderiv_jacobian(function(x) 
+                                        generalized_wishart(E = E, 
+                                             phi = x, 
+                                             nu = nu,
+                                             S = S)$gradient_E, 
+                                        phi)
+
+    num_partial_S <- .numderiv_jacobian(function(x) 
+                                        generalized_wishart(E = E, 
+                                             phi = phi, 
+                                             nu = nu,
+                                             S = x)$gradient, 
+                                        S)[,lower.tri(S)]
+
+    num_jacobian_E <- function(X) 
+      matrix(c(X) %*% .numderiv_jacobian(function(x) 
+                                         generalized_wishart(E = x, 
+                                              phi = phi, 
+                                              nu = nu,
+                                              S = S)$gradient_E, 
+                                         E), 
+             nrow(X), ncol(X))
+
+    num_jacobian_S <- function(X) 
+      matrix(c(X) %*% .numderiv_jacobian(function(x) 
+                                         generalized_wishart(E = E, 
+                                              phi = phi, 
+                                              nu = nu,
+                                              S = x)$gradient_E, 
+                                         S), 
+             nrow(X), ncol(X))
+  }
+
+  list(objective        = -c(loglik), 
+       fitted           = fitted,
+       boundary         = nonnegative && tau == 0,
+       gradient         = if(!gradient) NULL else -dPhi,
+       hessian          = if(!hessian)  NULL else -ddPhi,
+       gradient_E       = if(!partial)  NULL else -dE, 
+       partial_E        = if(!partial)  NULL else -ddEdPhi,   # partial_E[i,k] is d(dl/dE_i)/dPhi_k where i is linearized matrix index
+       partial_S        = if(!partial)  NULL else -ddPhidS,   # partial_S[i,k] is d(dl/dPhi_i)/dS_k where k is linearized matrix index
+       jacobian_E       = if(!partial)  NULL else jacobian_E, # function mapping vectorized dg/dE to d(dg/dE)/dE
+       jacobian_S       = if(!partial)  NULL else jacobian_S, # function mapping vectorized dg/dE to d(dg/dE)/dS
+       num_gradient     = if(!validate) NULL else num_gradient,
+       num_hessian      = if(!validate) NULL else num_hessian,
+       num_gradient_E   = if(!validate) NULL else num_gradient_E,
+       num_partial_E    = if(!validate) NULL else num_partial_E,
+       num_partial_S    = if(!validate) NULL else num_partial_S,
+       num_jacobian_E   = if(!validate) NULL else num_jacobian_E,
+       num_jacobian_S   = if(!validate) NULL else num_jacobian_S)
+}
+class(generalized_wishart) <- c("terradish_measurement_model",
+                                "radish_measurement_model")

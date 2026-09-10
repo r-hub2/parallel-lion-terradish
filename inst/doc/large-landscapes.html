@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Bill Peterman" />
+
+
+<title>Large Landscapes</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Large Landscapes</h1>
+<h4 class="author">Bill Peterman</h4>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#when-a-landscape-is-large" id="toc-when-a-landscape-is-large"><span class="toc-section-number">1</span> When a landscape is “large”</a></li>
+<li><a href="#choosing-a-solver" id="toc-choosing-a-solver"><span class="toc-section-number">2</span> Choosing a solver</a></li>
+<li><a href="#inference-at-scale" id="toc-inference-at-scale"><span class="toc-section-number">3</span> Inference at scale</a></li>
+<li><a href="#curvature-for-standard-errors" id="toc-curvature-for-standard-errors"><span class="toc-section-number">4</span> Curvature for standard
+errors</a></li>
+<li><a href="#markers-and-sites-buy-precision" id="toc-markers-and-sites-buy-precision"><span class="toc-section-number">5</span> Markers and sites buy
+precision</a></li>
+<li><a href="#an-exact-memory-bounded-reduction" id="toc-an-exact-memory-bounded-reduction"><span class="toc-section-number">6</span> An exact, memory-bounded
+reduction</a></li>
+<li><a href="#quick-reference" id="toc-quick-reference"><span class="toc-section-number">7</span> Quick reference</a></li>
+<li><a href="#summary-of-key-functions" id="toc-summary-of-key-functions"><span class="toc-section-number">8</span> Summary of key functions</a></li>
+<li><a href="#see-also" id="toc-see-also"><span class="toc-section-number">9</span> See also</a></li>
+</ul>
+</div>
+
+<p>This vignette covers fitting <code>terradish</code> models on large
+rasters: hundreds of thousands to millions of grid cells. If you have
+not read
+<code>vignette(&quot;getting-started&quot;, package = &quot;terradish&quot;)</code>, start
+there. It explains conductance surfaces, the model formula, and how to
+read a fitted model. Here we assume you already know how to fit a small
+model and focus on what changes when the landscape gets big.</p>
+<p>A note on the numbers below. A vignette cannot run a million-cell
+fit, so the runnable code uses the small bundled <code>melip</code> data
+only to show the calls. The scaling results are values measured on
+rasters far larger than <code>melip</code>, on a 64 GB workstation.
+Absolute times are hardware dependent; the pattern is the point.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">data</span>(melip)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>melip.altitude    <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.altitude)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>melip.forestcover <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.forestcover)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>melip.coords      <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.coords)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>covariates <span class="ot">&lt;-</span> <span class="fu">c</span>(melip.altitude, melip.forestcover)</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">names</span>(covariates) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;altitude&quot;</span>, <span class="st">&quot;forestcover&quot;</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>covariates <span class="ot">&lt;-</span> <span class="fu">scale_covariates</span>(covariates)</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>surface    <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covariates, melip.coords, <span class="at">directions =</span> <span class="dv">8</span>)</span></code></pre></div>
+<hr />
+<div id="when-a-landscape-is-large" class="section level2" number="1">
+<h2><span class="header-section-number">1</span> When a landscape is
+“large”</h2>
+<p><code>terradish</code> builds a weighted graph over the raster grid
+and solves a linear system on that graph to get resistance distances
+among focal sites. The cost of that solve grows with the number of grid
+cells, <code>N</code>. Three things change as <code>N</code> grows into
+the hundreds of thousands and beyond:</p>
+<ol style="list-style-type: decimal">
+<li>The linear <strong>solver</strong> that computes resistance
+distances can run out of memory. Picking the right one (Section 3) is
+what keeps a fit feasible.</li>
+<li>The <strong>inference</strong> machinery (standard errors and
+confidence intervals) is unchanged in form, but larger analyses can
+include more focal sites. Wishart precision also depends on the supplied
+effective degrees of freedom, <code>nu</code> (Section 4).</li>
+<li>An exact, <strong>memory-bounded reduction</strong> onto the focal
+sites becomes useful as a diagnostic and as an out-of-core building
+block (Section 5).</li>
+</ol>
+<p>“Large” here means the regime where the default solver’s memory use
+becomes the binding constraint. On a 64 GB workstation that boundary
+falls between roughly 1.3 and 2.1 million cells; on a smaller machine it
+falls sooner.</p>
+<hr />
+</div>
+<div id="choosing-a-solver" class="section level2" number="2">
+<h2><span class="header-section-number">2</span> Choosing a solver</h2>
+<p>Both <code>terradish()</code> (the fitting wrapper) and
+<code>terradish_algorithm()</code> (one likelihood and gradient
+evaluation) take a <code>solver</code> argument. The solver only changes
+<strong>how</strong> the resistance-distance linear system is solved; it
+does not change the statistical model. Iterative solvers should agree
+with the direct solver within their numerical tolerances, but estimates
+need not be bitwise identical.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># direct (the default): exact sparse Cholesky factorization</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(melip.Fst <span class="sc">~</span> forestcover <span class="sc">+</span> altitude, surface,</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>                 <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>                 <span class="at">solver =</span> <span class="st">&quot;direct&quot;</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co"># amg: algebraic multigrid, the large-N path</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(melip.Fst <span class="sc">~</span> forestcover <span class="sc">+</span> altitude, surface,</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>                 <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>                 <span class="at">solver =</span> <span class="st">&quot;amg&quot;</span>)</span></code></pre></div>
+<p>The choices:</p>
+<ul>
+<li><strong><code>direct</code></strong> (default): a sparse Cholesky
+factorization. It is the fastest option through several hundred thousand
+cells. Its factor “fill” (the nonzeros the factorization adds) grows
+faster than the graph itself, so past some size the factor no longer
+fits in memory. That is the <strong>memory wall</strong>.</li>
+<li><strong><code>amg</code></strong>: smoothed-aggregation
+<strong>algebraic multigrid</strong>, an iterative solver. Each solve
+costs roughly linear time in <code>N</code>, and its iteration count
+stays nearly constant as <code>N</code> grows (this is called
+mesh-independent convergence), so total cost scales near-linearly. This
+is the intended path past the wall.</li>
+<li><strong><code>block_cg</code></strong>,
+<strong><code>pcg</code></strong>,
+<strong><code>pcg_jacobi</code></strong>: conjugate-gradient variants
+for small or well-conditioned graphs. <code>block_cg</code> shares one
+Krylov subspace across all focal sites. These are fallbacks, not the
+large-N path.</li>
+<li><strong><code>auto</code></strong>: lets <code>terradish</code>
+pick.</li>
+</ul>
+<p>Measured behavior on a heterogeneous grid (one likelihood and
+gradient evaluation, 50 focal sites):</p>
+<table>
+<thead>
+<tr class="header">
+<th>cells</th>
+<th><code>direct</code> time</th>
+<th><code>amg</code> time</th>
+<th><code>amg</code> iterations</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>65,536</td>
+<td>1.1 s</td>
+<td>2.9 s</td>
+<td>10</td>
+</tr>
+<tr class="even">
+<td>262,144</td>
+<td>3.9 s</td>
+<td>7.0 s</td>
+<td>13</td>
+</tr>
+<tr class="odd">
+<td>524,176</td>
+<td>6.9 s</td>
+<td>10.0 s</td>
+<td>11</td>
+</tr>
+<tr class="even">
+<td>1,048,576</td>
+<td>14.4 s</td>
+<td>21.2 s</td>
+<td>12</td>
+</tr>
+<tr class="odd">
+<td>1,327,104</td>
+<td>22.4 s</td>
+<td>30.1 s</td>
+<td>14</td>
+</tr>
+<tr class="even">
+<td>2,096,704</td>
+<td>memory wall</td>
+<td>39.2 s</td>
+<td>12</td>
+</tr>
+<tr class="odd">
+<td>4,194,304</td>
+<td>memory wall</td>
+<td>74.2 s</td>
+<td>13</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to read this table.</strong> <code>direct</code> is
+faster wherever it fits, but its time grows faster than the cell count
+and it eventually runs out of memory (here between 1.3 and 2.1 million
+cells). <code>amg</code> is slower at small sizes because each solve
+carries setup overhead, but its <strong>iteration count barely
+moves</strong> (10 to 14 across a 64-fold increase in cells), so
+doubling the cells roughly doubles the time rather than more than
+doubling it, and it keeps running well past the wall. The decision rule:
+use <code>direct</code> while it fits in memory, and switch to
+<code>amg</code> once the raster is large enough that
+<code>direct</code> fails or thrashes.</p>
+<p>This applies to every symmetric resistance model: any
+<code>conductance_model</code> (<code>loglinear_conductance</code>,
+<code>smooth_loglinear_conductance</code>, the Gaussian scale-aware and
+hierarchical models) paired with any measurement model
+(<code>mlpe</code>, <code>leastsquares</code>,
+<code>generalized_wishart</code>, and <code>wishart_covariance</code>).
+The solver sits underneath all of them. The one exception is the
+directional model (<code>terradish_directed()</code>), which runs a
+different algorithm on an asymmetric generator; see
+<code>vignette(&quot;directional-conductance&quot;, package = &quot;terradish&quot;)</code>.</p>
+<hr />
+</div>
+<div id="inference-at-scale" class="section level2" number="3">
+<h2><span class="header-section-number">3</span> Inference at scale</h2>
+<p>Scaling the solver lets you fit larger graph domains and sampling
+designs. More informative designs can tighten inference, but cell count
+alone does not. Two settings matter here.</p>
+</div>
+<div id="curvature-for-standard-errors" class="section level2" number="4">
+<h2><span class="header-section-number">4</span> Curvature for standard
+errors</h2>
+<p><code>terradish()</code> and <code>terradish_algorithm()</code> take
+<code>curvature = c(&quot;exact&quot;, &quot;gauss_newton&quot;)</code>. The objective and
+gradient are the same; the options differ in the Hessian approximation
+used for optimization and standard errors. Fits should be compared for
+numerical agreement rather than assumed identical.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="co"># Generalized Wishart requires an admissible squared-distance response that is</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="co"># coherently related to a centered positive-semidefinite covariance matrix.</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="co"># exact (default): full observed Hessian</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(admissible_squared_distance <span class="sc">~</span> forestcover <span class="sc">+</span> altitude, surface,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>                 <span class="at">measurement_model =</span> generalized_wishart,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>                 <span class="at">nu =</span> effective_marker_df,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>                 <span class="at">curvature =</span> <span class="st">&quot;exact&quot;</span>)</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co"># gauss_newton: information-based curvature</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(admissible_squared_distance <span class="sc">~</span> forestcover <span class="sc">+</span> altitude, surface,</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>                 <span class="at">measurement_model =</span> generalized_wishart,</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>                 <span class="at">nu =</span> effective_marker_df,</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>                 <span class="at">curvature =</span> <span class="st">&quot;gauss_newton&quot;</span>)</span></code></pre></div>
+<ul>
+<li><strong><code>exact</code></strong> uses the full observed
+Hessian.</li>
+<li><strong><code>gauss_newton</code></strong> drops the two
+residual-weighted second-derivative terms, leaving the
+<strong>Gauss-Newton information</strong> curvature. It needs only the
+first derivatives of conductance and is positive semidefinite when the
+retained measurement-model curvature is positive semidefinite. It flows
+unchanged into <code>vcov()</code>, <code>summary()</code>, and
+<code>confint()</code>, so the standard errors become asymptotic,
+information-based errors. It approaches the exact Hessian when the
+omitted residual-weighted terms are negligible; equality is not
+guaranteed merely because a fit has converged.</li>
+</ul>
+<p><strong>How to choose.</strong> Both are validated for
+<code>leastsquares</code> and the <code>generalized_wishart</code>
+measurement model. Use the <code>exact</code> default for routine work.
+Reach for <code>gauss_newton</code> when the optimizer struggles with an
+indefinite Hessian far from the optimum, or when you want strictly
+information-based standard errors. At a well-behaved fit they may agree
+closely. Compare them as a sensitivity check when curvature choice
+materially changes uncertainty or convergence.</p>
+<p>The focused benchmark in
+<code>inst/benchmarks/benchmark-curvature-large-landscape.R</code> makes
+this comparison reproducible. It builds a synthetic heterogeneous
+raster, simulates a <code>generalized_wishart</code> squared-distance
+response from known conductance parameters, then fits the same model
+with <code>curvature = &quot;exact&quot;</code> and
+<code>curvature = &quot;gauss_newton&quot;</code>.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">source</span>(<span class="fu">system.file</span>(<span class="st">&quot;benchmarks&quot;</span>, <span class="st">&quot;benchmark-curvature-large-landscape.R&quot;</span>,</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>                   <span class="at">package =</span> <span class="st">&quot;terradish&quot;</span>))</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>bench <span class="ot">&lt;-</span> <span class="fu">run_curvature_large_landscape_benchmark</span>(CONFIG)</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>bench<span class="sc">$</span>comparison</span></code></pre></div>
+<p>The default case is deliberately small enough to run during review.
+To repeat the same comparison in the large-N solver regime, copy
+<code>CONFIG</code>, increase <code>side</code>, and set
+<code>solver = &quot;amg&quot;</code> or <code>solver = &quot;auto&quot;</code> before
+calling <code>run_curvature_large_landscape_benchmark()</code>.</p>
+<p>On the development workstation, the default 96 x 96 synthetic case
+gave:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Comparison</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Maximum absolute coefficient difference</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td>Absolute log-likelihood difference</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<td><code>ridge</code> SE ratio, <code>gauss_newton</code> /
+<code>exact</code></td>
+<td>0.997</td>
+</tr>
+<tr class="even">
+<td><code>basin</code> SE ratio, <code>gauss_newton</code> /
+<code>exact</code></td>
+<td>0.994</td>
+</tr>
+<tr class="odd">
+<td>Elapsed-time ratio, <code>gauss_newton</code> /
+<code>exact</code></td>
+<td>0.807</td>
+</tr>
+<tr class="even">
+<td>Minimum exact-Hessian eigenvalue</td>
+<td>2363.5</td>
+</tr>
+<tr class="odd">
+<td>Minimum Gauss-Newton eigenvalue</td>
+<td>2375.9</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to read this benchmark.</strong> The fitted surface did
+not move: the coefficients and log likelihood were identical. The
+standard errors were within 1% because the simulated data were generated
+from the fitted model and the residual-weighted second-derivative terms
+were small. In this setting, <code>gauss_newton</code> was slightly
+faster and returned a positive-definite information matrix. If your real
+data show much larger differences in standard errors, run both curvature
+settings as a sensitivity check; that gap is evidence that model
+residuals or misspecification are affecting the observed curvature.</p>
+</div>
+<div id="markers-and-sites-buy-precision" class="section level2" number="5">
+<h2><span class="header-section-number">5</span> Markers and sites buy
+precision</h2>
+<p>With the <code>generalized_wishart</code> measurement model,
+<code>nu</code> is the supplied effective Wishart degrees of freedom,
+not an estimated parameter or automatically the raw marker count.
+Holding the response and model fixed while varying <code>nu</code> shows
+the theoretical scaling pattern (focal sites held at 80):</p>
+<table>
+<thead>
+<tr class="header">
+<th><code>nu</code></th>
+<th>mean standard error</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>500</td>
+<td>0.0044</td>
+</tr>
+<tr class="even">
+<td>1,000</td>
+<td>0.0031</td>
+</tr>
+<tr class="odd">
+<td>2,000</td>
+<td>0.0022</td>
+</tr>
+<tr class="even">
+<td>4,000</td>
+<td>0.0015</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to read this.</strong> The point estimates do not change
+with <code>nu</code>; only their precision does. The standard error
+falls as <code>1 / sqrt(nu)</code>: increasing the effective degrees of
+freedom eightfold (500 to 4,000) tightens the standard error about
+2.9-fold, which is close to <code>sqrt(8) = 2.83</code>. Standard errors
+also shrink as you add focal sites in many designs, but the amount
+depends on their placement, covariate support, and the graph. Report a
+justified primary <code>nu</code> and sensitivity values; for
+microsatellites, use locus count as primary and <span class="math inline">\(\sum_l(K_l-1)\)</span> only as a larger
+sensitivity value.</p>
+<hr />
+</div>
+<div id="an-exact-memory-bounded-reduction" class="section level2" number="6">
+<h2><span class="header-section-number">6</span> An exact,
+memory-bounded reduction</h2>
+<p><code>terradish_kron_reduce_tiled()</code> reduces the full graph
+Laplacian onto the focal sites exactly, returning the focal
+effective-resistance structure while keeping peak memory in check. It is
+the same result as <code>terradish_kron_reduce()</code> (the single-shot
+reduction), computed so that it does not have to factorize the whole
+interior at once.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># a conductance vector to reduce (evaluate the model at some theta)</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>model <span class="ot">&lt;-</span> <span class="fu">loglinear_conductance</span>(<span class="sc">~</span> forestcover <span class="sc">+</span> altitude, surface<span class="sc">$</span>x)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>cond  <span class="ot">&lt;-</span> <span class="fu">model</span>(<span class="fu">c</span>(<span class="fl">0.3</span>, <span class="sc">-</span><span class="fl">0.2</span>))<span class="sc">$</span>conductance</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>red <span class="ot">&lt;-</span> <span class="fu">terradish_kron_reduce_tiled</span>(surface, cond)</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>red<span class="sc">$</span>method                 <span class="co"># which strategy &quot;auto&quot; chose</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt; [1] &quot;direct&quot;</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>red<span class="sc">$</span>peak<span class="sc">$</span>interior          <span class="co"># largest single factorization (vertices)</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt; [1] 22409</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>red<span class="sc">$</span>n_interior             <span class="co"># interior vertices in total</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; [1] 22409</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co"># forcing nested dissection bounds the largest factorization far below the</span></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="co"># whole interior (this is the path that keeps memory in check at scale)</span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>nested <span class="ot">&lt;-</span> <span class="fu">terradish_kron_reduce_tiled</span>(surface, cond, <span class="at">method =</span> <span class="st">&quot;nested&quot;</span>)</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>nested<span class="sc">$</span>peak<span class="sc">$</span>interior</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt; [1] 1332</span></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a></span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co"># both are identical to the single-shot reduction</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a>single <span class="ot">&lt;-</span> <span class="fu">terradish_kron_reduce</span>(surface, cond)</span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a>P <span class="ot">&lt;-</span> <span class="fu">match</span>(single<span class="sc">$</span>boundary, red<span class="sc">$</span>boundary)</span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="fu">max</span>(<span class="fu">abs</span>(<span class="fu">as.matrix</span>(red<span class="sc">$</span>laplacian[P, P]) <span class="sc">-</span></span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a>        <span class="fu">as.matrix</span>(single<span class="sc">$</span>laplacian))) <span class="sc">/</span> <span class="fu">max</span>(<span class="fu">abs</span>(<span class="fu">as.matrix</span>(single<span class="sc">$</span>laplacian)))</span>
+<span id="cb5-24"><a href="#cb5-24" tabindex="-1"></a><span class="co">#&gt; [1] 0</span></span></code></pre></div>
+<p><strong>How to read the output.</strong> <code>method</code> reports
+the strategy actually used; on a graph this small <code>&quot;auto&quot;</code>
+chooses <code>&quot;direct&quot;</code>, so <code>peak$interior</code> equals
+<code>n_interior</code> (the single-shot path factorizes the whole
+interior at once). When you force <code>&quot;nested&quot;</code>,
+<code>peak$interior</code> drops far below <code>n_interior</code>: that
+gap is the memory the bounded path saves, and it is what lets the
+reduction run on rasters where the single-shot factor would not fit. The
+final number is the relative difference from the single-shot reduction;
+it is at the level of floating-point round-off, confirming every path is
+exact.</p>
+<p>The strategy is controlled by <code>method</code> and
+<code>mem_budget</code>:</p>
+<table>
+<colgroup>
+<col width="36%" />
+<col width="26%" />
+<col width="36%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>method</code></td>
+<td><code>&quot;auto&quot;</code></td>
+<td><code>&quot;auto&quot;</code> uses the fast single-shot factorization while it
+is estimated to fit <code>mem_budget</code>, and switches to nested
+dissection only when it would not. <code>&quot;direct&quot;</code> forces
+single-shot; <code>&quot;nested&quot;</code> forces nested dissection.</td>
+</tr>
+<tr class="even">
+<td><code>mem_budget</code></td>
+<td><code>4e9</code></td>
+<td>The memory budget in bytes for the <code>&quot;auto&quot;</code> decision. The
+estimate (returned as <code>est_factor_bytes</code>) tracks the
+single-shot factor size.</td>
+</tr>
+<tr class="odd">
+<td><code>cores</code></td>
+<td><code>1</code></td>
+<td>Worker processes for nested dissection. With
+<code>cores &gt; 1</code> its independent recursive halves run in
+parallel by forking on Unix. The result is identical to the sequential
+run.</td>
+</tr>
+<tr class="even">
+<td><code>n_tiles</code></td>
+<td><code>2000</code></td>
+<td>The nested-dissection leaf size (vertices per subdomain).</td>
+</tr>
+</tbody>
+</table>
+<p>The two strategies trade speed against memory:</p>
+<ul>
+<li><strong>single-shot</strong> (<code>&quot;direct&quot;</code>) factorizes the
+whole interior in one pass. It is fast (this is the CHOLMOD path), but
+the factor can exhaust memory at large scale, the same wall the
+<code>direct</code> solver hits.</li>
+<li><strong>nested dissection</strong> (<code>&quot;nested&quot;</code>)
+recursively bisects the interior with thin separators, so no single
+factorization exceeds a separator width. Its memory stays bounded at
+scales where the single-shot factor would not fit. It is markedly slower
+per element, which is exactly why <code>&quot;auto&quot;</code> reserves it for
+the regime where the single-shot factor would run out of memory.</li>
+</ul>
+<p><strong>Scope.</strong> This reduction is a standalone, exact
+primitive: a diagnostic and an out-of-core building block that returns
+the focal effective-resistance structure. It is <strong>not</strong>
+wired into model fitting; to fit a model on a large raster, use
+<code>solver = &quot;amg&quot;</code> (Section 3), not this function. It also
+applies to the symmetric resistance models only, not the directional
+model.</p>
+<hr />
+</div>
+<div id="quick-reference" class="section level2" number="7">
+<h2><span class="header-section-number">7</span> Quick reference</h2>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># 1. Build the surface as usual</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covariates, coords, <span class="at">directions =</span> <span class="dv">8</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co"># 2. Fit at scale: use amg once the raster is too large for the direct solver</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># Generalized Wishart requires an admissible squared-distance response.</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish</span>(admissible_squared_distance <span class="sc">~</span> cov1 <span class="sc">+</span> cov2, surface,</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>                 <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>                 <span class="at">measurement_model =</span> generalized_wishart,</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>                 <span class="at">nu =</span> effective_marker_df,</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>                 <span class="at">solver    =</span> <span class="st">&quot;amg&quot;</span>,            <span class="co"># large-N linear solver</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>                 <span class="at">curvature =</span> <span class="st">&quot;gauss_newton&quot;</span>)   <span class="co"># information-based standard errors</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="fu">summary</span>(fit)                                   <span class="co"># conditional estimates and SEs</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="co"># 3. (Advanced) exact memory-bounded reduction onto the focal sites</span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>cond_map <span class="ot">&lt;-</span> <span class="fu">conductance</span>(surface, fit)[[<span class="st">&quot;est&quot;</span>]]</span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a>cond <span class="ot">&lt;-</span> terra<span class="sc">::</span><span class="fu">values</span>(cond_map, <span class="at">mat =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a>cond <span class="ot">&lt;-</span> cond[<span class="fu">is.finite</span>(cond)]                   <span class="co"># active-cell conductance vector</span></span>
+<span id="cb6-19"><a href="#cb6-19" tabindex="-1"></a>red  <span class="ot">&lt;-</span> <span class="fu">terradish_kron_reduce_tiled</span>(surface, cond)  <span class="co"># auto: fast unless it would not fit</span></span>
+<span id="cb6-20"><a href="#cb6-20" tabindex="-1"></a>red<span class="sc">$</span>method                                     <span class="co"># &quot;direct&quot; or &quot;nested&quot;</span></span></code></pre></div>
+</div>
+<div id="summary-of-key-functions" class="section level2" number="8">
+<h2><span class="header-section-number">8</span> Summary of key
+functions</h2>
+<table>
+<colgroup>
+<col width="52%" />
+<col width="47%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>conductance_surface()</code></td>
+<td>Build the weighted graph over the raster grid</td>
+</tr>
+<tr class="even">
+<td><code>terradish()</code></td>
+<td>Fit the model; takes <code>solver</code> and
+<code>curvature</code></td>
+</tr>
+<tr class="odd">
+<td><code>terradish_algorithm()</code></td>
+<td>One likelihood and gradient evaluation; same <code>solver</code> and
+<code>curvature</code></td>
+</tr>
+<tr class="even">
+<td><code>terradish_kron_reduce()</code></td>
+<td>Single-shot exact reduction onto the focal sites</td>
+</tr>
+<tr class="odd">
+<td><code>terradish_kron_reduce_tiled()</code></td>
+<td>Memory-aware exact reduction
+(<code>auto</code>/<code>direct</code>/<code>nested</code>)</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="see-also" class="section level2" number="9">
+<h2><span class="header-section-number">9</span> See also</h2>
+<ul>
+<li><strong><code>vignette(&quot;getting-started&quot;, package = &quot;terradish&quot;)</code></strong>
+the core workflow: data in, model fit, interpretation out.</li>
+<li><strong><code>vignette(&quot;wishart-covariance&quot;, package = &quot;terradish&quot;)</code></strong>
+the distance and covariance Wishart measurement models and the role of
+<code>nu</code>.</li>
+<li><strong><code>vignette(&quot;model-comparison&quot;, package = &quot;terradish&quot;)</code></strong>
+ranking competing models with AIC and likelihood ratio tests.</li>
+<li><strong><code>vignette(&quot;directional-conductance&quot;, package = &quot;terradish&quot;)</code></strong>
+the directional model, which uses a separate algorithm.</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

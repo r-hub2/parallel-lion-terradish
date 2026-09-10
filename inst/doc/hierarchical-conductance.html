@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Bill Peterman" />
+
+
+<title>Hierarchical conductance: covariates plus a smooth field</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Hierarchical conductance: covariates plus a
+smooth field</h1>
+<h4 class="author">Bill Peterman</h4>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#why-add-a-field-to-a-covariate-model" id="toc-why-add-a-field-to-a-covariate-model"><span class="toc-section-number">1</span> Why add a field to a covariate
+model?</a></li>
+<li><a href="#how-it-is-fit" id="toc-how-it-is-fit"><span class="toc-section-number">2</span> How it is fit</a></li>
+<li><a href="#a-worked-example" id="toc-a-worked-example"><span class="toc-section-number">3</span> A worked example</a>
+<ul>
+<li><a href="#behavior-in-this-controlled-simulation" id="toc-behavior-in-this-controlled-simulation"><span class="toc-section-number">3.1</span> Behavior in this controlled
+simulation</a></li>
+<li><a href="#mapping-fitted-residual-log-conductance" id="toc-mapping-fitted-residual-log-conductance"><span class="toc-section-number">3.2</span> Mapping fitted residual
+log-conductance</a></li>
+</ul></li>
+<li><a href="#selecting-tau2" id="toc-selecting-tau2"><span class="toc-section-number">4</span> Selecting <code>tau2</code></a></li>
+<li><a href="#practical-guidance" id="toc-practical-guidance"><span class="toc-section-number">5</span> Practical guidance</a></li>
+<li><a href="#quick-reference" id="toc-quick-reference"><span class="toc-section-number">6</span> Quick-reference</a></li>
+<li><a href="#summary-of-key-functions" id="toc-summary-of-key-functions"><span class="toc-section-number">7</span> Summary of key functions</a></li>
+<li><a href="#see-also" id="toc-see-also"><span class="toc-section-number">8</span> See also</a></li>
+</ul>
+</div>
+
+<div id="why-add-a-field-to-a-covariate-model" class="section level2" number="1">
+<h2><span class="header-section-number">1</span> Why add a field to a
+covariate model?</h2>
+<p>A covariate conductance model (<code>terradish</code> with
+<code>loglinear_conductance</code>) can leave spatial structure that the
+supplied covariates and transformations do not represent. That residual
+pattern can reflect an omitted covariate, an incorrect functional form,
+spatial confounding, sampling structure, historical signal, or
+measurement-model mismatch.</p>
+<p><code>terradish_hierarchical()</code> represents log-conductance as a
+covariate term <strong>plus a spatially smooth Gaussian random
+field</strong>:</p>
+<p><span class="math display">\[\log c = X\theta + u, \qquad u \sim
+\mathrm{Normal}\!\big(0,\ \tau^2 (L_{coarse} + \epsilon
+I)^{-1}\big).\]</span></p>
+<p>The proper GMRF prior pulls neighboring field values together, with
+<span class="math inline">\(\tau^2\)</span> controlling how much
+residual structure the field may absorb. This model includes two
+limiting cases:</p>
+<ul>
+<li>set the field to zero (<span class="math inline">\(\tau^2 \to
+0\)</span>) and you recover
+<strong><code>terradish</code></strong>;</li>
+<li>drop the covariates and let <span class="math inline">\(u\)</span>
+carry the whole surface to obtain a free, smoothed field;</li>
+<li>keep both to estimate covariate coefficients conditional on a
+flexible residual spatial term.</li>
+</ul>
+<p>The fitted field <span class="math inline">\(u\)</span> is primarily
+a <strong>diagnostic</strong>: it maps residual log-conductance
+structure after the supplied covariates. The field may reduce some
+omitted spatial pattern in a controlled setting, but it can also compete
+with spatially structured covariates. It does not guarantee unbiased
+<span class="math inline">\(\theta\)</span>, identify a missing
+mechanism, or establish causality. Interpret both <span class="math inline">\(\theta\)</span> and <span class="math inline">\(u\)</span> conditionally and examine sensitivity
+to field resolution and <span class="math inline">\(\tau^2\)</span>.</p>
+</div>
+<div id="how-it-is-fit" class="section level2" number="2">
+<h2><span class="header-section-number">2</span> How it is fit</h2>
+<p>The penalized objective is</p>
+<p><span class="math display">\[J(\theta, u) = -\ell(\theta, u \mid
+\phi) + \tfrac{1}{2\tau^2}\, u^\top (L_{coarse}+\epsilon I)\,
+u,\]</span></p>
+<p>where <span class="math inline">\(\ell\)</span> is the
+measurement-model log-likelihood (the nuisance parameters <span class="math inline">\(\phi\)</span> profiled out) and <span class="math inline">\(L_{coarse}\)</span> is the Laplacian of the
+coarse-field adjacency graph. The field lives on a coarse
+<code>field_resolution</code> <span class="math inline">\(\times\)</span> <code>field_resolution</code> grid
+over the landscape, deliberately coarser than the covariate grid. This
+reduces, but does not eliminate, competition between <span class="math inline">\(\theta\)</span> and <span class="math inline">\(u\)</span> for the same spatial pattern.</p>
+<p>Optimization is by L-BFGS over <span class="math inline">\((\theta,
+u)\)</span> using only the gradient, which flows through the same single
+sparse-Cholesky solve <code>terradish</code> already uses; the dense
+Hessian over the field is never formed. The field variance <span class="math inline">\(\tau^2\)</span> is chosen by a Laplace
+(empirical-Bayes) marginal likelihood that integrates the field out.</p>
+</div>
+<div id="a-worked-example" class="section level2" number="3">
+<h2><span class="header-section-number">3</span> A worked example</h2>
+<p>We use the bundled <em>Melipona</em> landscape and
+<strong>simulate</strong> a covariance response whose generating
+conductance depends on altitude and forest cover <strong>plus an omitted
+smooth feature</strong>. This deliberately favorable simulation
+illustrates the method under a known model; it is not a general
+validation of field or coefficient recovery.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(terra)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">data</span>(melip)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>covs <span class="ot">&lt;-</span> <span class="fu">c</span>(terra<span class="sc">::</span><span class="fu">scale</span>(terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.altitude)),</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>          terra<span class="sc">::</span><span class="fu">scale</span>(terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.forestcover)))</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="fu">names</span>(covs) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;altitude&quot;</span>, <span class="st">&quot;forestcover&quot;</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covs, terra<span class="sc">::</span><span class="fu">unwrap</span>(melip.coords), <span class="at">directions =</span> <span class="dv">8</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">20</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>n  <span class="ot">&lt;-</span> <span class="fu">length</span>(surface<span class="sc">$</span>demes)                       <span class="co"># 37 focal sites</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>Vc <span class="ot">&lt;-</span> surface<span class="sc">$</span>vertex_coordinates                  <span class="co"># cell centers of the graph</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>X  <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(surface<span class="sc">$</span>x[, <span class="fu">c</span>(<span class="st">&quot;altitude&quot;</span>, <span class="st">&quot;forestcover&quot;</span>)])</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="co"># The UNMAPPED feature: a smooth Gaussian bump in log-conductance that no</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co"># raster in the model encodes. Centering it keeps it out of the intercept.</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>xr <span class="ot">&lt;-</span> <span class="fu">range</span>(Vc[, <span class="dv">1</span>]); yr <span class="ot">&lt;-</span> <span class="fu">range</span>(Vc[, <span class="dv">2</span>])</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>blob <span class="ot">&lt;-</span> <span class="fl">1.6</span> <span class="sc">*</span> <span class="fu">exp</span>(<span class="sc">-</span>(((Vc[, <span class="dv">1</span>] <span class="sc">-</span> (xr[<span class="dv">1</span>] <span class="sc">+</span> <span class="fl">0.35</span> <span class="sc">*</span> <span class="fu">diff</span>(xr)))<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>                     (Vc[, <span class="dv">2</span>] <span class="sc">-</span> (yr[<span class="dv">1</span>] <span class="sc">+</span> <span class="fl">0.6</span> <span class="sc">*</span> <span class="fu">diff</span>(yr)))<span class="sc">^</span><span class="dv">2</span>) <span class="sc">/</span></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>                    (<span class="dv">2</span> <span class="sc">*</span> (<span class="fl">0.18</span> <span class="sc">*</span> <span class="fu">sqrt</span>(<span class="fu">diff</span>(xr)<span class="sc">^</span><span class="dv">2</span> <span class="sc">+</span> <span class="fu">diff</span>(yr)<span class="sc">^</span><span class="dv">2</span>))<span class="sc">^</span><span class="dv">2</span>)))</span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>blob <span class="ot">&lt;-</span> blob <span class="sc">-</span> <span class="fu">mean</span>(blob)</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co"># True log-conductance = 0.5*altitude - 0.6*forestcover + 1.0*blob.</span></span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co"># .design_loglinear_model() builds a conductance model straight from a design</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co"># matrix, which lets us put the blob in the truth without giving it to the fit.</span></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a>E <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(<span class="fu">terradish_algorithm</span>(</span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>  terradish<span class="sc">:::</span><span class="fu">.design_loglinear_model</span>(<span class="fu">cbind</span>(X, blob)),</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>  leastsquares, surface, <span class="at">S =</span> <span class="fu">diag</span>(n), <span class="at">theta =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="sc">-</span><span class="fl">0.6</span>, <span class="fl">1.0</span>),</span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a>  <span class="at">objective =</span> <span class="cn">FALSE</span>, <span class="at">gradient =</span> <span class="cn">FALSE</span>, <span class="at">hessian =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a>  <span class="at">partial =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>covariance)</span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a></span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co"># Draw a genetic covariance matrix from that truth. With real data this is</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="co"># where cov_from_genetic_data() or cov_from_biallelic() would supply S, and nu</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co"># would be your effective marker count.</span></span>
+<span id="cb2-27"><a href="#cb2-27" tabindex="-1"></a>nu <span class="ot">&lt;-</span> <span class="dv">1500</span></span>
+<span id="cb2-28"><a href="#cb2-28" tabindex="-1"></a>S  <span class="ot">&lt;-</span> <span class="fu">rWishart</span>(<span class="dv">1</span>, <span class="at">df =</span> nu, <span class="at">Sigma =</span> (E <span class="sc">+</span> <span class="fl">0.25</span> <span class="sc">*</span> <span class="fu">diag</span>(n)) <span class="sc">/</span> nu)[, , <span class="dv">1</span>]</span></code></pre></div>
+<p>Fit the hierarchical model, letting <span class="math inline">\(\tau^2\)</span> be chosen by REML, and a plain
+<code>terradish</code> model for comparison:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>fit_h <span class="ot">&lt;-</span> <span class="fu">terradish_hierarchical</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  S <span class="sc">~</span> altitude <span class="sc">+</span> forestcover,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="at">data              =</span> surface,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">measurement_model =</span> wishart_covariance,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">nu                =</span> <span class="dv">1500</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="at">field_resolution  =</span> <span class="dv">6</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="at">tau2              =</span> <span class="st">&quot;reml&quot;</span></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>)</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>fit_plain <span class="ot">&lt;-</span> <span class="fu">terradish</span>(</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>  S <span class="sc">~</span> altitude <span class="sc">+</span> forestcover, <span class="at">data =</span> surface,</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>  <span class="at">conductance_model =</span> loglinear_conductance,</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>  <span class="at">measurement_model =</span> wishart_covariance, <span class="at">nu =</span> <span class="dv">1500</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a>)</span></code></pre></div>
+<div id="behavior-in-this-controlled-simulation" class="section level3" number="3.1">
+<h3><span class="header-section-number">3.1</span> Behavior in this
+controlled simulation</h3>
+<table>
+<caption>Conductance coefficients (true: altitude 0.50, forestcover
+-0.60)</caption>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="right">altitude</th>
+<th align="right">forestcover</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">hierarchical (with field)</td>
+<td align="right">0.540</td>
+<td align="right">-0.632</td>
+</tr>
+<tr class="even">
+<td align="left">plain terradish (no field)</td>
+<td align="right">0.548</td>
+<td align="right">-0.432</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># With the field: altitude ~0.54, forestcover ~-0.63 (close to truth 0.50, -0.60)</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">coef</span>(fit_h)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co"># Without the field: forestcover ~-0.43 in this particular simulation.</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">coef</span>(fit_plain)</span></code></pre></div>
+<p>In this controlled simulation, the fitted field correlates
+<strong>0.89</strong> with the generating blob, and the selected field
+variance is <strong>tau^2 = 0.316</strong>.</p>
+<p>In this one simulation, the plain model’s forest-cover coefficient is
+closer to zero and the hierarchical coefficient is closer to the
+generating value. That contrast demonstrates possible behavior under a
+deliberately matched setting. It does not show that a field generally
+removes omitted-variable bias.</p>
+</div>
+<div id="mapping-fitted-residual-log-conductance" class="section level3" number="3.2">
+<h3><span class="header-section-number">3.2</span> Mapping fitted
+residual log-conductance</h3>
+<p><code>conductance_field()</code> returns the field as a raster (when
+the graph stored its stack), so you can inspect where residual structure
+remains under the fitted model:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>field_raster <span class="ot">&lt;-</span> <span class="fu">conductance_field</span>(fit_h, surface, <span class="at">type =</span> <span class="st">&quot;field&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">plot</span>(field_raster)            <span class="co"># the smooth residual conductance surface u</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Or the full fitted surface, exp(X theta + u):</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">conductance_field</span>(fit_h, surface, <span class="at">type =</span> <span class="st">&quot;conductance&quot;</span>))</span></code></pre></div>
+<div class="float">
+<img role="img" aria-label="Fitted smooth residual field u in the controlled simulation. The peak overlaps the omitted generating feature." src="data:image/png;base64,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" alt="Fitted smooth residual field u in the controlled simulation. The peak overlaps the omitted generating feature." />
+<div class="figcaption">Fitted smooth residual field u in the controlled
+simulation. The peak overlaps the omitted generating feature.</div>
+</div>
+</div>
+</div>
+<div id="selecting-tau2" class="section level2" number="4">
+<h2><span class="header-section-number">4</span> Selecting
+<code>tau2</code></h2>
+<p>With <code>tau2 = &quot;reml&quot;</code> (the default),
+<code>terradish_hierarchical()</code> evaluates a Laplace marginal
+likelihood across <code>tau2_grid</code> and reports the profile:</p>
+<table>
+<caption>Laplace marginal log-likelihood across the tau^2 grid (interior
+maximum).</caption>
+<thead>
+<tr class="header">
+<th align="right">tau2</th>
+<th align="right">logML</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">0.010</td>
+<td align="right">-7694.918</td>
+</tr>
+<tr class="even">
+<td align="right">0.032</td>
+<td align="right">-7654.469</td>
+</tr>
+<tr class="odd">
+<td align="right">0.100</td>
+<td align="right">-7637.749</td>
+</tr>
+<tr class="even">
+<td align="right">0.316</td>
+<td align="right">-7634.891</td>
+</tr>
+<tr class="odd">
+<td align="right">1.000</td>
+<td align="right">-7638.764</td>
+</tr>
+<tr class="even">
+<td align="right">3.162</td>
+<td align="right">-7646.004</td>
+</tr>
+<tr class="odd">
+<td align="right">10.000</td>
+<td align="right">-7655.910</td>
+</tr>
+<tr class="even">
+<td align="right">31.623</td>
+<td align="right">-7667.700</td>
+</tr>
+<tr class="odd">
+<td align="right">100.000</td>
+<td align="right">-7680.748</td>
+</tr>
+</tbody>
+</table>
+<p>A clear interior maximum (rather than a value pinned at the smallest
+or largest grid point) indicates that an intermediate field variance
+maximizes this empirical-Bayes profile. It does not identify a unique
+biological spatial scale. If the maximum sits at a grid boundary, widen
+<code>tau2_grid</code>. You can also pass a fixed numeric
+<code>tau2</code> if you want to control the amount of flexibility
+directly, or set it from external information.</p>
+</div>
+<div id="practical-guidance" class="section level2" number="5">
+<h2><span class="header-section-number">5</span> Practical guidance</h2>
+<ul>
+<li><strong>Keep the field coarser than your covariates.</strong>
+<code>field_resolution</code> controls this; a field as fine as the
+covariate grid can mimic covariate gradients and erode identifiability.
+Start coarse (the default <code>6</code>) and increase only if a clear,
+stable feature demands it.</li>
+<li><strong>Read the field as a diagnostic, not a mechanism.</strong> A
+strong field feature indicates residual structure under the fitted
+model. It is a hypothesis generator, not an explanation by itself.</li>
+<li><strong>Genetic data constrain conductance weakly.</strong> Added
+flexibility is only helpful if paid for by an informative prior; that is
+exactly what the GMRF on the (coarse) field provides. Sanity-check that
+<code>theta</code> and predictive accuracy are stable across a couple of
+<code>field_resolution</code> values.</li>
+<li><strong>Compare sensitivity, not just one fit.</strong> Compare
+<code>theta</code>, the field, and predictive behavior across a plain
+fit, several <code>field_resolution</code> values, and a defensible
+<code>tau2_grid</code>. Stability is more informative than any single
+residual map.</li>
+</ul>
+</div>
+<div id="quick-reference" class="section level2" number="6">
+<h2><span class="header-section-number">6</span> Quick-reference</h2>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">library</span>(terradish)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co"># 1. Build the conductance surface (as for any terradish workflow)</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>surface <span class="ot">&lt;-</span> <span class="fu">conductance_surface</span>(covariates, coords, <span class="at">directions =</span> <span class="dv">8</span>)</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co"># 2. Fit the hierarchical model (covariates + smooth field), REML tau^2</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">terradish_hierarchical</span>(</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>  S <span class="sc">~</span> forestcover <span class="sc">+</span> altitude,</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>  <span class="at">data              =</span> surface,</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>  <span class="at">measurement_model =</span> wishart_covariance,   <span class="co"># or generalized_wishart / mlpe</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>  <span class="at">nu                =</span> nu,</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>  <span class="at">field_resolution  =</span> <span class="dv">6</span>,</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a>  <span class="at">tau2              =</span> <span class="st">&quot;reml&quot;</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a>)</span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a><span class="co"># 3. Inspect conditional coefficients and the residual-field diagnostic</span></span>
+<span id="cb6-17"><a href="#cb6-17" tabindex="-1"></a><span class="fu">summary</span>(fit)                                  <span class="co"># theta + tau^2 profile</span></span>
+<span id="cb6-18"><a href="#cb6-18" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">conductance_field</span>(fit, surface))         <span class="co"># the field u</span></span></code></pre></div>
+</div>
+<div id="summary-of-key-functions" class="section level2" number="7">
+<h2><span class="header-section-number">7</span> Summary of key
+functions</h2>
+<table>
+<colgroup>
+<col width="52%" />
+<col width="47%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>conductance_surface()</code></td>
+<td>Build the weighted graph over the raster grid</td>
+</tr>
+<tr class="even">
+<td><code>terradish_hierarchical()</code></td>
+<td>Fit <code>log c = X theta + u</code>, selecting <code>tau^2</code>
+by REML</td>
+</tr>
+<tr class="odd">
+<td><code>summary()</code></td>
+<td>Covariate table, field sd and edf, and the <code>tau^2</code>
+profile</td>
+</tr>
+<tr class="even">
+<td><code>conductance_field()</code></td>
+<td>Return the field <code>u</code> or the full surface as a
+<code>SpatRaster</code></td>
+</tr>
+<tr class="odd">
+<td><code>plot(type = &quot;field&quot;)</code></td>
+<td>Map the fitted residual log-conductance field</td>
+</tr>
+<tr class="even">
+<td><code>AIC()</code></td>
+<td>Conditional-likelihood summary that charges the field’s edf; use
+cautiously with sensitivity and predictive checks</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="see-also" class="section level2" number="8">
+<h2><span class="header-section-number">8</span> See also</h2>
+<ul>
+<li><strong><code>vignette(&quot;getting-started&quot;, package = &quot;terradish&quot;)</code></strong>,
+the plain covariate model this one extends.</li>
+<li><strong><code>vignette(&quot;spline-conductance&quot;, package = &quot;terradish&quot;)</code></strong>,
+added flexibility in the covariate response rather than in space.</li>
+<li><strong><code>vignette(&quot;wishart-covariance&quot;, package = &quot;terradish&quot;)</code></strong>,
+the covariance measurement model used here and how to choose
+<code>nu</code>.</li>
+<li><strong><code>vignette(&quot;model-comparison&quot;, package = &quot;terradish&quot;)</code></strong>,
+deciding whether the field earns the effective degrees of freedom it
+costs.</li>
+</ul>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,51 @@
+Package: terradish
+Type: Package
+Title: Fast Gradient-Based Optimization of Resistance Surfaces
+Version: 0.0.46
+Date: 2026-09-08
+Authors@R: c(
+  person(
+    given = "Bill",
+    family = "Peterman",
+    role = c("aut", "cre"),
+    email = "peterman.73@osu.edu",
+    comment = c(ORCID = "0000-0001-5229-9268")
+  ),
+  person(
+    given = c("Nathaniel", "S."),
+    family = "Pope",
+    role = "aut",
+    email = "nspope@utexas.edu",
+    comment = c(ORCID = "0000-0001-8409-7812")
+  )
+  )
+Description: Maximum likelihood estimation for parameterized conductance models
+  via Newton and quasi-Newton methods, for moderate-sized problems
+  such as spatial grids with fewer than a million cells. Supports
+  'terra'-native workflows, Gaussian distance and Wishart distance or covariance
+  measurement models, spline and scale-aware conductance estimation,
+  environmental and diagonal-variance extensions, cross-validation across
+  supported conductance models, and selected-pair analysis while retaining all
+  focal sites in the resistance graph.
+URL: https://github.com/wpeterman/terradish,
+        https://doi.org/10.5281/zenodo.21225712
+BugReports: https://github.com/wpeterman/terradish/issues
+License: BSD_3_clause + file LICENSE
+Depends: R (>= 4.0.0)
+Imports: ggplot2, grDevices, landgraph (>= 0.0.1), MASS, Matrix (>=
+        1.6-2), methods, multiScaleR, nlme, parallel, Rcpp (>= 1.0.4),
+        splines, stats, terra, utils
+LinkingTo: Matrix (>= 1.6-2), Rcpp, RcppArmadillo, RcppEigen
+Suggests: adegenet, knitr, numDeriv, patchwork, pkgload, rmarkdown,
+        testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Encoding: UTF-8
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
+NeedsCompilation: yes
+Packaged: 2026-09-10 02:41:34 UTC; peterman.73
+Author: Bill Peterman [aut, cre] (ORCID:
+    <https://orcid.org/0000-0001-5229-9268>),
+  Nathaniel S. Pope [aut] (ORCID:
+    <https://orcid.org/0000-0001-8409-7812>)
+Maintainer: Bill Peterman <peterman.73@osu.edu>

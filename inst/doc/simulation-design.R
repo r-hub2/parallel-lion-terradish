@@ -1,0 +1,248 @@
+## ----setup, include = FALSE---------------------------------------------------
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 6,
+  fig.height = 4.5,
+  warning  = FALSE,
+  message  = FALSE
+)
+# The power runs below are far too slow to execute during a package build, so
+# their results are precomputed by vignettes/precompute.R and loaded here. The
+# .rds artifacts are excluded from the built tarball, so a re-build of the
+# vignette will not find them; every chunk that needs them is guarded on
+# `have_power`, and the vignette still renders (without those results) when
+# they are absent.
+.art   <- tryCatch(readRDS("vignette-nu-power.rds"), error = function(e) NULL)
+.power <- tryCatch(readRDS("vignette-power.rds"), error = function(e) NULL)
+have_power <- !is.null(.art) && !is.null(.power)
+
+## ----template-----------------------------------------------------------------
+library(terradish)
+library(terra)
+
+data(melip)
+melip.altitude    <- terra::unwrap(melip.altitude)
+melip.forestcover <- terra::unwrap(melip.forestcover)
+melip.coords      <- terra::unwrap(melip.coords)
+
+covariates <- c(melip.altitude, melip.forestcover)
+names(covariates) <- c("altitude", "forestcover")
+covariates <- scale_covariates(covariates)
+
+surface <- conductance_surface(covariates, melip.coords,
+                               directions = 8, saveStack = TRUE)
+
+cat("Candidate focal sites:", length(surface$demes), "\n")
+
+## ----truth--------------------------------------------------------------------
+theta_true <- c(forestcover = 0.6, altitude = -0.4)
+tau_true   <- 2   # strength of the landscape signal
+sigma_true <- 1   # nugget (non-landscape variance)
+
+## ----single-sim---------------------------------------------------------------
+sim <- simulate_covariance_response(
+  theta             = theta_true,
+  formula           = ~ forestcover + altitude,
+  data              = surface,
+  conductance_model = loglinear_conductance,
+  tau               = tau_true,
+  sigma             = sigma_true,
+  nu                = 100,     # 100 effective independent marker contributions
+  seed              = 1
+)
+
+dim(sim$covariance)        # one row/column per focal site
+round(sim$covariance[1:4, 1:4], 3)
+
+## ----single-fit---------------------------------------------------------------
+fit <- terradish(
+  sim$covariance ~ forestcover + altitude,
+  data              = surface,
+  conductance_model = loglinear_conductance,
+  measurement_model = wishart_covariance,
+  nu                = 100
+)
+
+rbind(true      = theta_true,
+      estimated = round(coef(fit), 3))
+
+## ----nu-power, eval = FALSE---------------------------------------------------
+# altitude_surface <- conductance_surface(
+#   covariates[["altitude"]], melip.coords,
+#   directions = 8, saveStack = TRUE
+# )
+# 
+# screen_theta  <- c(altitude = -0.25)
+# screen_sigma  <- 1
+# signal_ratios <- c(0.5, 1, 2, 4)
+# 
+# screen_power <- function(sample_size, nu, signal_ratio,
+#                          nsim = 10, seed = 100) {
+#   assessment <- covariance_response_power(
+#     theta        = screen_theta,
+#     formula      = ~ altitude,
+#     data         = altitude_surface,
+#     sample_sizes = sample_size,
+#     strategies   = "spacefill",
+#     tau          = signal_ratio * screen_sigma,
+#     sigma        = screen_sigma,
+#     nu           = nu,
+#     nsim         = nsim,
+#     seed         = seed,
+#     control      = NewtonRaphsonControl(maxit = 10, verbose = FALSE)
+#   )
+#   out <- assessment$parameter_summary
+#   data.frame(sample_size, nu, signal_ratio,
+#              fit_rate = out$fit_rate, power = out$power)
+# }
+# 
+# screen_grid <- function(sample_sizes, nu_values, seed) {
+#   grid <- expand.grid(sample_size = sample_sizes, nu = nu_values,
+#                       signal_ratio = signal_ratios)
+#   do.call(rbind, Map(screen_power,
+#                      sample_size = grid$sample_size,
+#                      nu = grid$nu,
+#                      signal_ratio = grid$signal_ratio,
+#                      seed = seed + seq_len(nrow(grid))))
+# }
+# 
+# marker_power <- screen_grid(sample_sizes = 20,
+#                             nu_values = c(20, 50, 100, 200),
+#                             seed = 100)
+# marker_power
+
+## ----nu-power-load, echo = FALSE, eval = have_power---------------------------
+# Pre-computed results (see vignettes/precompute.R to regenerate)
+marker_power  <- .art$marker_power
+site_power    <- .art$site_power
+signal_ratios <- .art$signal_ratios
+screen_nsim   <- .art$screen_nsim
+marker_power
+
+## ----nu-power-plot, eval = have_power, fig.cap = "***Power responds to effective Wishart degrees of freedom and the tau / sigma signal ratio.*** Each point is the proportion of 10 simulated data sets in which the altitude coefficient had the correct sign and a two-sided Wald p-value below alpha = 0.05. The 20 sampling sites are held fixed. The small demonstration grid leaves visible Monte Carlo variation."----
+cols <- setNames(c("#7570b3", "#1b9e77", "#d95f02", "#e7298a"),
+                 signal_ratios)
+plot(NA, xlim = range(marker_power$nu), ylim = c(0, 1), log = "x",
+     xlab = "Effective Wishart degrees of freedom (nu)",
+     ylab = "Model-based power for altitude",
+     main = "Power vs. effective nu")
+for (signal_ratio in signal_ratios) {
+  sub <- marker_power[marker_power$signal_ratio == signal_ratio, ]
+  lines(sub$nu, sub$power, type = "b", pch = 19,
+        col = cols[as.character(signal_ratio)])
+}
+abline(h = 0.8, lty = 2, col = "grey50")
+legend("bottomright", legend = paste("tau / sigma =", signal_ratios),
+       col = cols, lty = 1, pch = 19, bty = "n")
+
+## ----site-power, eval = FALSE-------------------------------------------------
+# sample_grid <- c(8, 12, 20, 34)
+# site_power <- screen_grid(sample_sizes = sample_grid,
+#                           nu_values = 100,
+#                           seed = 200)
+# site_power
+
+## ----site-power-load, echo = FALSE, eval = have_power-------------------------
+site_power
+
+## ----site-power-plot, eval = have_power, fig.cap = "***Power responds to sampling sites and the tau / sigma signal ratio.*** Each point is the proportion of 10 simulated data sets in which the altitude coefficient had the correct sign and a two-sided Wald p-value below alpha = 0.05. Effective Wishart degrees of freedom are held fixed at nu = 100. The small demonstration grid leaves visible Monte Carlo variation."----
+plot(NA, xlim = range(site_power$sample_size), ylim = c(0, 1),
+     xlab = "Number of sampling sites", ylab = "Model-based power for altitude",
+     main = "Power vs. sample size")
+for (signal_ratio in signal_ratios) {
+  sub <- site_power[site_power$signal_ratio == signal_ratio, ]
+  lines(sub$sample_size, sub$power, type = "b", pch = 19,
+        col = cols[as.character(signal_ratio)])
+}
+abline(h = 0.8, lty = 2, col = "grey50")
+legend("bottomright", legend = paste("tau / sigma =", signal_ratios),
+       col = cols, lty = 1, pch = 19, bty = "n")
+
+## ----power-run, eval = FALSE--------------------------------------------------
+# power <- covariance_response_power(
+#   theta             = theta_true,
+#   formula           = ~ forestcover + altitude,
+#   data              = surface,
+#   sample_sizes      = c(10, 20, 34),
+#   strategies        = c("spacefill", "random"),
+#   conductance_model = loglinear_conductance,
+#   fit_models = list(
+#     full          = list(formula = ~ forestcover + altitude),
+#     altitude_only = list(formula = ~ altitude)
+#   ),
+#   tau        = tau_true,
+#   sigma      = sigma_true,
+#   nu         = 100,
+#   nsim       = 20,    # increase for smoother estimates in a real study
+#   n_designs  = 2,     # random designs evaluated per sample size
+#   seed       = 1,
+#   control    = NewtonRaphsonControl(maxit = 10, verbose = FALSE)
+# )
+# 
+# power
+
+## ----power-run-load, echo = FALSE, eval = have_power--------------------------
+# Load pre-computed results (see vignettes/precompute.R to regenerate)
+power <- .power
+power
+
+## ----power-summary, eval = have_power-----------------------------------------
+power$summary[, c("strategy", "sample_size", "model",
+                  "fit_rate", "conductance_power",
+                  "mean_conductance_cor", "selected_AIC_rate")]
+
+## ----power-params, eval = have_power------------------------------------------
+power$parameter_summary[
+  power$parameter_summary$model == "full",
+  c("strategy", "sample_size", "parameter",
+    "power", "bias", "rmse", "coverage")
+]
+
+## ----power-plot, eval = have_power, fig.cap = "***Power to recover each conductance coefficient as a function of sample size (spacefill design, generating formula).*** The dashed line marks 80% power.", fig.height = 4.5----
+ps <- power$parameter_summary
+ps <- ps[ps$model == "full" & ps$strategy == "spacefill", ]
+
+cols <- c(forestcover = "#1b9e77", altitude = "#d95f02")
+plot(NA, xlim = range(ps$sample_size), ylim = c(0, 1),
+     xlab = "Number of sampling sites", ylab = "Power",
+     main = "Parameter recovery vs. sample size")
+for (p in names(cols)) {
+  sub <- ps[ps$parameter == p, ]
+  sub <- sub[order(sub$sample_size), ]
+  lines(sub$sample_size, sub$power, type = "b", pch = 19, col = cols[p])
+}
+abline(h = 0.8, lty = 2, col = "grey50")
+legend("bottomright", legend = names(cols), col = cols,
+       lty = 1, pch = 19, bty = "n")
+
+## ----quick-reference, eval = FALSE--------------------------------------------
+# library(terradish)
+# library(terra)
+# 
+# # 1. Build a landscape template (saveStack = TRUE enables site subsetting)
+# surface <- conductance_surface(covariates, coords,
+#                                directions = 8, saveStack = TRUE)
+# 
+# # 2. One simulated covariance matrix from specified generating parameters
+# sim <- simulate_covariance_response(
+#   theta = c(x1 = 0.6, x2 = -0.4), formula = ~ x1 + x2,
+#   data = surface, tau = 2, sigma = 1, nu = 100, seed = 1
+# )
+# 
+# # 3. Refit to check recovery
+# fit <- terradish(sim$covariance ~ x1 + x2, data = surface,
+#                  conductance_model = loglinear_conductance,
+#                  measurement_model = wishart_covariance, nu = 100)
+# coef(fit)
+# 
+# # 4. Full design assessment across sample sizes / strategies / models
+# power <- covariance_response_power(
+#   theta = c(x1 = 0.6, x2 = -0.4), formula = ~ x1 + x2,
+#   data = surface, sample_sizes = c(10, 20, 30),
+#   strategies = c("spacefill", "random"),
+#   tau = 2, sigma = 1, nu = 100, nsim = 200, seed = 1
+# )
+# power$summary            # fit rate, conductance recovery, model selection
+# power$parameter_summary  # power, bias, RMSE, coverage per coefficient
+
