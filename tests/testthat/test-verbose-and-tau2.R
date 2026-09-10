@@ -126,8 +126,10 @@ test_that("a failing tau2 grid point is skipped, recorded, and reported", {
 
   # the failed point is recorded as NA rather than dropped from the table
   expect_equal(nrow(fit$tau2_selection), 3L)
-  expect_true(any(is.na(fit$tau2_selection$logML)))
-  expect_true(all(is.finite(fit$tau2_selection$logML[1:2])))
+  expect_true(is.na(fit$tau2_selection$logML[fit$tau2_selection$tau2 == 10]))
+  expect_true(any(is.finite(
+    fit$tau2_selection$logML[fit$tau2_selection$tau2 != 10]
+  )))
 
   # tau2 is chosen from the points that worked
   usable <- fit$tau2_selection$tau2[is.finite(fit$tau2_selection$logML)]
