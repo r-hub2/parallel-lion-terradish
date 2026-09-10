@@ -89,13 +89,22 @@ hierarchical_fixture <- function() {
 }
 
 test_that("a failing tau2 grid point is skipped, recorded, and reported", {
-  # tau2 = 10 makes the nuisance Hessian singular from the warm start carried
-  # in from tau2 = 1. Before the fix this aborted the whole fit. One verbose
-  # fit exercises every part of the contract, so the fixture is built once.
+  # Force one grid-point failure so the contract is tested independently of
+  # platform-specific optimizer and linear-algebra behavior.
   fx <- hierarchical_fixture()
   S <- fx$S
   warnings_seen <- character()
   msgs <- character()
+
+  original_fit_fixed <- getFromNamespace(".hierarchical_fit_fixed", "terradish")
+  local_mocked_bindings(
+    .hierarchical_fit_fixed = function(par0, tau2, ...) {
+      if (isTRUE(all.equal(tau2, 10)))
+        stop("forced tau2 grid failure")
+      original_fit_fixed(par0, tau2, ...)
+    },
+    .package = "terradish"
+  )
 
   fit <- withCallingHandlers(
     terradish_hierarchical(S ~ altitude + forestcover, data = fx$surface,
