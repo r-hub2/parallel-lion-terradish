@@ -5,7 +5,10 @@ knitr::opts_chunk$set(
   fig.width  = 7,
   fig.height = 5,
   warning   = FALSE,
-  message   = FALSE
+  message   = FALSE,
+  # The complete rendered vignette is built into the source tarball. Avoid
+  # repeating its long model fits on CRAN's shared check machines.
+  eval = !identical(Sys.getenv("_R_CHECK_CRAN_INCOMING_"), "TRUE")
 )
 
 
