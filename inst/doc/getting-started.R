@@ -206,6 +206,12 @@ cat("One SD increase in forest cover multiplies conductance by",
 cat("One SD increase in altitude multiplies conductance by",
     round(exp(theta["altitude"]), 2), "\n")
 
+## ----coefficient-uncertainty--------------------------------------------------
+vcov(fit_mlpe)
+confint(fit_mlpe)
+fit_mlpe$convergence
+fit_mlpe$fit$subproblem$convergence
+
 ## ----plot-fit, fig.cap = "***Observed vs. resistance-distance-fitted genetic distances.***"----
 plot(fit_mlpe, type = "fit")
 
@@ -218,25 +224,25 @@ plot(fit_mlpe, data = surface)
 ## ----marginal-conductance, fig.cap = "***Marginal association of each covariate with conductance, with a 95% CI.***"----
 plot(fit_mlpe, type = "marginal", data = surface)
 
-## ----support-clamp, eval = FALSE----------------------------------------------
-# # Clamp selected covariates to focal-site quantile support before plotting.
-# plot(
-#   fit_mlpe,
-#   type = "marginal",
-#   data = surface,
-#   support = "focal",
-#   support_probs = c(0.01, 0.99),
-#   clamp_covariates = c("altitude", "forestcover")
-# )
-# 
-# # Apply the same support rule to raster conductance prediction.
-# cond_focal <- conductance(
-#   surface,
-#   fit_mlpe,
-#   support = "focal",
-#   support_probs = c(0.01, 0.99),
-#   clamp_covariates = c("altitude", "forestcover")
-# )
+## ----support-clamp------------------------------------------------------------
+# Clamp selected covariates to focal-site quantile support before plotting.
+plot(
+  fit_mlpe,
+  type = "marginal",
+  data = surface,
+  support = "focal",
+  support_probs = c(0.01, 0.99),
+  clamp_covariates = c("altitude", "forestcover")
+)
+
+# Apply the same support rule to raster conductance prediction.
+cond_focal <- conductance(
+  surface,
+  fit_mlpe,
+  support = "focal",
+  support_probs = c(0.01, 0.99),
+  clamp_covariates = c("altitude", "forestcover")
+)
 
 ## ----full-workflow, eval = FALSE----------------------------------------------
 # library(terradish)
@@ -275,8 +281,7 @@ plot(fit_mlpe, type = "marginal", data = surface)
 # #                        requires nu
 # #   wishart_covariance : Wishart model, requires nu (covariance matrix)
 # #   For Wishart IBE or site-level environmental covariance kernels, use
-# #   wishart_covariates(); pair_subset_measurement_model() is for pairwise
-# #   regression rows and does not apply to the full-matrix Wishart likelihood.
+# #   wishart_covariates().
 # fit <- terradish(melip.Fst ~ forestcover + altitude,
 #                  data              = surface,
 #                  conductance_model = loglinear_conductance,

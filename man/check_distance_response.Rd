@@ -16,7 +16,7 @@ model.}
 \item{tol}{Positive numeric scalar. Relative tolerance used for structural
 checks and for classifying negative eigenvalues. An eigenvalue is treated
 as numerical zero when it is no smaller than
-\eqn{-tol \lambda_{max}}, where \eqn{\lambda_{max}} is the largest
+\eqn{-\mathrm{tol}\,\lambda_{\max}}, where \eqn{\lambda_{\max}} is the largest
 eigenvalue of the centered Gram matrix.}
 }
 \value{
@@ -54,6 +54,11 @@ For \eqn{n} sites, the function forms
 The response is admissible when \eqn{B} is positive semidefinite within the
 requested tolerance. Symmetry, nonnegative entries, and a zero diagonal are
 necessary but are not sufficient.
+Passing this geometry check does not create a Wishart sampling model.
+Use covariance-derived squared distances with a defensible effective
+information parameter. \eqn{F_{ST}} ratio estimators have no Wishart
+degrees of freedom merely because their distance matrix passes the check;
+consider \code{\link{mlpe}} for those responses.
 
 This function checks the matrix that you actually intend to analyze because
 scaling, transformations, locus aggregation, and missing-data handling can

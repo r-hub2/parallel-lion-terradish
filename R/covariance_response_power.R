@@ -5,6 +5,7 @@
 #' existing \code{\link{conductance_surface}} object, responses are generated
 #' with \code{\link{simulate_covariance_response}}, and one or more candidate
 #' conductance models are refit to each simulated covariance matrix.
+#' Gaussian smoothing widths are simulated and reported in map units.
 #'
 #' @param theta True conductance parameters. By default these are interpreted on
 #'   the same external scale returned by \code{\link{coef}} for fitted
@@ -30,17 +31,12 @@
 #'   matrix during simulation.
 #' @param sigma Nonnegative nugget variance added to the covariance diagonal
 #'   during simulation.
-#' @param nu Effective Wishart degrees of freedom, passed to both simulation
-#'   and \code{\link{wishart_covariance}} fitting.  For biallelic SNPs use the
-#'   number of retained polymorphic SNPs (reduced for linkage disequilibrium).
-#'   For microsatellites, use the number of loci \eqn{L} as the primary value;
-#'   \eqn{\sum_l (K_l - 1)}, where \eqn{K_l} is the number of observed alleles
-#'   at locus \eqn{l}, is a larger sensitivity value rather than a default.
-#'   Because \code{nu} acts as an effective sample size, it is a primary lever
-#'   for power. Report the primary value and sensitivity analysis. See
-#'   \code{\link{wishart_covariance}} for details on how \code{nu} scales
-#'   inference. For simulation, \code{nu} must also be at least the largest
-#'   assessed covariance-matrix dimension.
+#' @param nu Effective Wishart information used to simulate the response.
+#'   Larger values reduce simulated sampling noise. The fitting value defaults
+#'   to it through \code{nu_fit = nu}; neither is an estimate
+#'   of information from real data. Report a sensitivity analysis rather than
+#'   substituting the marker count. Simulation requires \code{nu} to be at
+#'   least the largest assessed covariance-matrix dimension.
 #' @param nsim Number of covariance-response simulations per sampling design.
 #' @param n_designs Number of independent site designs per sample size for
 #'   \code{strategy = "random"}. Deterministic strategies are evaluated once.
@@ -89,8 +85,13 @@
 #'     simulation replicate.}
 #'   \item{\code{parameter_summary}}{Parameter-level power, bias, RMSE, and
 #'     coverage summaries.}
-#'   \item{\code{settings}}{Simulation settings and true parameters.}
+#'   \item{\code{settings}}{Simulation settings and true parameters, including
+#'     \code{nu} for simulation and \code{nu_fit} for inference.}
 #' }
+#' Power and coverage are internal to the assumed response model. Matching
+#' simulation and fitting values cannot diagnose incorrect information in a
+#' real data set. Nonconverged fits count as failed fits and non-detections;
+#' inspect \code{fit_rate} before interpreting power or coverage.
 #'
 #' @examples
 #' \donttest{
@@ -144,6 +145,10 @@
 #' }
 #'
 #' @export
+#' @param nu_fit Effective Wishart degrees of freedom used to fit each
+#'   simulation. Defaults to the generating \code{nu}. Increasing this value
+#'   narrows fitted intervals without adding independent information. Compare
+#'   coverage as well as power when exploring this sensitivity.
 covariance_response_power <- function(theta,
                                       formula,
                                       data,
@@ -164,8 +169,7 @@ covariance_response_power <- function(theta,
                                       optimizer = c("auto", "newton", "bfgs"),
                                       control = NewtonRaphsonControl(maxit = 8,
                                                                      verbose = FALSE),
-                                      solver = c("auto", "direct", "amg",
-                                                 "pcg", "pcg_jacobi"),
+                                      solver = c("auto", "direct", "amg"),
                                       solver_control = NULL,
                                       approximation = c("none", "landmark",
                                                         "coarse_raster"),
@@ -173,9 +177,12 @@ covariance_response_power <- function(theta,
                                       nonnegative = TRUE,
                                       leverage = FALSE,
                                       cores = 1L,
-                                      verbose = FALSE)
+                                      verbose = FALSE,
+                                      nu_fit = nu)
 {
   stopifnot(inherits(formula, "formula"))
+  if (length(nu_fit) != 1L || !is.finite(nu_fit) || nu_fit <= 0)
+    stop("`nu_fit` must be finite and positive.", call. = FALSE)
   stopifnot(inherits(data, c("terradish_graph", "radish_graph")))
   stopifnot(inherits(conductance_model,
                      c("terradish_conductance_model_factory",
@@ -282,7 +289,8 @@ covariance_response_power <- function(theta,
                     " sim=", sim_id)
 
           sim <- simulate_covariance_response(
-            theta = theta_internal,
+            # The simulator converts map-unit Gaussian widths to cell units.
+            theta = theta_external,
             formula = formula,
             data = subset_data,
             conductance_model = conductance_model,
@@ -312,7 +320,7 @@ covariance_response_power <- function(theta,
               data = subset_data,
               conductance_model = spec$conductance_model,
               measurement_model = wishart_covariance,
-              nu = nu,
+              nu = nu_fit,
               theta = .covariance_power_spec_value(spec, "theta", NULL),
               leverage = .covariance_power_spec_value(spec, "leverage",
                                                        leverage),
@@ -481,6 +489,7 @@ covariance_response_power <- function(theta,
       tau = tau,
       sigma = sigma,
       nu = nu,
+      nu_fit = nu_fit,
       nsim = as.integer(nsim),
       n_designs = as.integer(n_designs),
       theta = theta_external,
@@ -729,7 +738,10 @@ print.terradish_covariance_power <- function(x, ...)
                                          conductance_cor_threshold)
 {
   ok <- identical(status, "OK") && inherits(fit, c("terradish", "radish")) &&
-    !is.null(fit$mle$theta)
+    !is.null(fit$mle$theta) && isTRUE(fit$convergence$code == 0L)
+  if (identical(status, "OK") && !is.null(fit$convergence$code) &&
+      fit$convergence$code != 0L)
+    status <- paste("NONCONVERGED:", fit$convergence$message)
   fitted_conductance <- if (ok)
     tryCatch(fit$submodels$f(fit$mle$theta)$conductance,
              error = function(e) rep(NA_real_, length(true_conductance)))

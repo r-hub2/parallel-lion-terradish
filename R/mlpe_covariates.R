@@ -47,7 +47,7 @@
 #'
 #' The returned object has class \code{"terradish_pairwise_covariates"}.  This
 #' class carries the original site-level covariate matrix and the chosen
-#' transform as attributes, so that \code{\link{terradish_cv}} can
+#' transform as attributes, so that \code{\link{terradish_cv_folds}} can
 #' automatically rebuild the correct pairwise covariates for each train/test
 #' split.
 #'
@@ -59,7 +59,7 @@
 #'   chosen transform (e.g. \code{"absdiff_altitude"},
 #'   \code{"euclidean"}).
 #'
-#' @seealso \code{\link{mlpe_covariates}}, \code{\link{terradish_cv}},
+#' @seealso \code{\link{mlpe_covariates}}, \code{\link{terradish_cv_folds}},
 #'   \code{\link{terradish}}
 #'
 #' @examples
@@ -81,6 +81,7 @@
 #' head(z_env)
 #'
 #' @export
+#' @template pairwise-interpretation
 pairwise_endpoint_covariates <- function(x,
                                          coords = NULL,
                                          transform = c("absdiff", "sqdiff",
@@ -121,7 +122,7 @@ pairwise_endpoint_covariates <- function(x,
 #' @details
 #' The fitted mean structure is:
 #'
-#' \deqn{S_{ij} = \alpha + \beta R_{ij} + Z_{ij}^\top \gamma + e_{ij}}
+#' \deqn{S_{ij} = \alpha + \beta R_{ij} + Z_{ij}\gamma + e_{ij}}
 #'
 #' where \eqn{R_{ij}} is the resistance distance (IBR) and \eqn{Z_{ij}} is the
 #' row of pairwise endpoint-difference covariates for the pair \eqn{(i,j)}
@@ -144,15 +145,15 @@ pairwise_endpoint_covariates <- function(x,
 #' When \code{x} is site-level data or the output of
 #' \code{pairwise_endpoint_covariates()}, the pairwise covariate matrix is
 #' stored as an attribute of the returned function.  This allows
-#' \code{\link{terradish_cv}} to rebuild the correct pairwise covariates for
+#' \code{\link{terradish_cv_folds}} to rebuild the correct pairwise covariates for
 #' each train/test split automatically.
 #'
 #' @return A function of class \code{"terradish_measurement_model"} suitable
 #'   for use as the \code{measurement_model} argument of \code{\link{terradish}},
-#'   \code{\link{terradish_grid}}, and \code{\link{terradish_cv}}.
+#'   \code{\link{terradish_grid}}, and \code{\link{terradish_cv_folds}}.
 #'
 #' @seealso \code{\link{mlpe}}, \code{\link{pairwise_endpoint_covariates}},
-#'   \code{\link{terradish_cv}}
+#'   \code{\link{terradish_cv_folds}}
 #'
 #' @references
 #' Clarke RT, Rothery P, Raybould AF. 2002. Confidence limits for regression
@@ -181,6 +182,11 @@ pairwise_endpoint_covariates <- function(x,
 #'
 #' }
 #' @export
+#' @details Unclassed matrices are interpreted as pairwise columns and must
+#'   have \eqn{n(n-1)/2} rows. Use a data frame for site-level columns, or
+#'   \code{\link{pairwise_endpoint_covariates}} to construct their differences.
+#'   \code{\link{pairwise_covariates}} combines these with other pairwise inputs.
+#' @template pairwise-interpretation
 mlpe_covariates <- function(x,
                             coords = NULL,
                             transform = c("absdiff", "sqdiff",
@@ -196,6 +202,11 @@ mlpe_covariates <- function(x,
   pairwise_covariates <- if (inherits(x, c("terradish_pairwise_covariates",
                                            "radish_pairwise_covariates")))
     x
+  else if (is.matrix(x)) {
+    .pairwise_site_count(nrow(x))
+    structure(.as_pairwise_covariate_matrix(x),
+              class = c("terradish_pairwise_covariates", "matrix", "array"))
+  }
   else
     pairwise_endpoint_covariates(x, coords = coords, transform = transform,
                                  scale = scale)
@@ -252,28 +263,14 @@ mlpe_covariates <- function(x,
     Ind <- which(lower.tri(R), arr.ind = TRUE)
     U   <- sparseMatrix(i = rep(seq_len(length(Sl)), 2), j = c(Ind), x = 1)
 
-    eigUtU <- .get_mlpe_eigen(nrow(E))
-    D      <- eigUtU$values
-    P      <- eigUtU$vectors
-    Dr     <- D/(1 - 2 * rho) + 1/rho
-
-    SigmaInv <- function(x)
-    {
-      Ax <- 1/(1 - 2 * rho) * x
-      x  <- t(U) %*% Ax
-      x  <- t(P) %*% x
-      x  <- x / Dr
-      x  <- P %*% x
-      x  <- Ax - 1/(1 - 2 * rho) * U %*% x
-      as.matrix(x)
-    }
-
-    SigmaLogDet <- sum(log(Dr)) + length(D) * log(rho) +
-      length(Sl) * log(1 - 2 * rho)
+    correlation <- .mlpe_correlation_operator(U, phi["rho"])
+    SigmaInv <- correlation$inverse
+    SigmaLogDet <- correlation$logdet
 
     e      <- Sl - X %*% coef_vec
     Si_e   <- SigmaInv(e)
-    loglik <- -0.5 * tau * t(e) %*% Si_e + 0.5 * nrow(e) * log(tau) -
+    quadratic <- correlation$quadratic(e)
+    loglik <- -0.5 * tau * quadratic + 0.5 * nrow(e) * log(tau) -
       0.5 * SigmaLogDet
 
     fitted <- matrix(0, nrow(S), ncol(S))
@@ -295,18 +292,17 @@ mlpe_covariates <- function(x,
 
       drho_Si_e  <- t(U) %*% Si_e
       drho_Si_e  <- as.matrix(2 * Si_e - U %*% drho_Si_e)
-      drho_trans <- rho * (1 - 2 * rho)
+      drho_trans <- correlation$derivative
 
       Si_X <- lapply(seq_len(p), function(j)
         SigmaInv(matrix(X[, j], ncol = 1)))
       names(Si_X) <- coef_names
 
       dPhi[coef_names, 1] <- tau * crossprod(X, Si_e)[, 1]
-      dPhi["tau", 1]      <- -0.5 * tau * t(e) %*% Si_e + 0.5 * length(e)
+      dPhi["tau", 1]      <- -0.5 * tau * quadratic + 0.5 * length(e)
       dPhi["rho", 1]      <-
         (-0.5 * tau * t(Si_e) %*% drho_Si_e -
-         0.5 * sum((2 * D/(1 - 2 * rho)^2 - 1/rho^2)/Dr) -
-         0.5 * length(D)/rho + length(Sl)/(1 - 2 * rho)) * drho_trans
+         0.5 * correlation$dlogdet) * drho_trans
 
       if (hessian || partial)
       {
@@ -328,14 +324,12 @@ mlpe_covariates <- function(x,
           ddPhi["rho", coef_names[j]] <- ddPhi[coef_names[j], "rho"]
         }
 
-        ddPhi["tau", "tau"] <- -0.5 * tau * t(e) %*% Si_e
+        ddPhi["tau", "tau"] <- -0.5 * tau * quadratic
         ddPhi["tau", "rho"] <- -0.5 * tau * t(Si_e) %*% drho_Si_e * drho_trans
         ddPhi["rho", "tau"] <- ddPhi["tau", "rho"]
         ddPhi["rho", "rho"] <-
           (-tau * t(drho_Si_e) %*% Si_drho_Si_e -
-           0.5 * sum((8 * D/(1 - 2 * rho)^3 + 2/rho^3)/Dr) +
-           0.5 * sum((2 * D/(1 - 2 * rho)^2 - 1/rho^2)^2/Dr^2) +
-           0.5 * length(D)/rho^2 + 2 * length(Sl)/(1 - 2 * rho)^2) *
+           0.5 * correlation$d2logdet) *
           drho_trans^2 + dPhi["rho", 1] * (1 - 4 * rho)
 
         if (partial)
@@ -397,6 +391,7 @@ mlpe_covariates <- function(x,
     list(objective  = -c(loglik),
          fitted     = fitted,
          boundary   = nonnegative && beta == 0,
+         rho_boundary = unname(phi["rho"] < -8),
          gradient   = if (!gradient) NULL else -dPhi,
          hessian    = if (!hessian)  NULL else -ddPhi,
          gradient_E = if (!partial)  NULL else -dE,
@@ -518,6 +513,18 @@ mlpe_covariates <- function(x,
 
   site_covariates <- attr(x, "site_covariates")
   transform <- attr(x, "transform")
+  if (is.null(site_covariates)) {
+    n <- .pairwise_site_count(nrow(x))
+    out <- vapply(seq_len(ncol(x)), function(j) {
+      D <- matrix(0, n, n)
+      D[lower.tri(D)] <- x[, j]
+      D <- D + t(D)
+      D <- D[index, index, drop = FALSE]
+      D[lower.tri(D)]
+    }, numeric(length(index) * (length(index) - 1) / 2))
+    out <- matrix(out, ncol = ncol(x), dimnames = list(NULL, colnames(x)))
+    return(structure(out, class = c("terradish_pairwise_covariates", "matrix", "array")))
+  }
   .make_pairwise_endpoint_covariates(site_covariates[index, , drop = FALSE],
                                      transform = transform)
 }

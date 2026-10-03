@@ -59,6 +59,7 @@
 
     list(k = k,
          hess_row = hess_row,
+         phi_sensitivity = state$subproblem$jacobian_phi(chunk_state[[m]]$dgrad__ddl_dE),
          partial_X_k = partial_X_k,
          partial_S_k = partial_S_k)
   })
@@ -136,6 +137,21 @@
   forceSymmetric((Q + Qd)[reduced_index, reduced_index, drop = FALSE])
 }
 
+.terradish_notice_state <- new.env(parent = emptyenv())
+
+.terradish_parallel_notice <- function(data, cores, solver, solver_control,
+                                      state = .terradish_notice_state) {
+  if (cores <= 1L || isTRUE(state$parallel)) return(invisible(NULL))
+  resolved <- .terradish_resolve_solver(data, solver, nrow(data$x), solver_control)$type
+  ignored <- resolved == "amg" ||
+    identical(solver_control$solve_backend, "cholmod_cpp_cached")
+  if (nrow(data$x) < 50000L || ignored) {
+    message("Parallel derivatives are experimental and use PSOCK workers. Only Hessian and partial solves can run in parallel; AMG and cached CHOLMOD ignore cores. Small graphs can be slower with multiple workers.")
+    state$parallel <- TRUE
+  }
+  invisible(NULL)
+}
+
 .terradish_auto_solver_defaults <- function()
 {
   list(
@@ -173,15 +189,10 @@
     resolved <- "direct"
     reason <- "prefer_direct_until_larger_graphs"
   }
-  else if (n_rhs <= as.integer(auto_control$auto_direct_max_rhs))
+  else
   {
     resolved <- "amg"
     reason <- "graph_large_enough_for_amg"
-  }
-  else
-  {
-    resolved <- "direct"
-    reason <- "large_graph_with_many_rhs_favors_direct"
   }
 
   list(type = resolved,
@@ -300,9 +311,6 @@
                                 power_iters = 4L,
                                 reuse_preconditioner = TRUE,
                                 reuse_preconditioner_max_age = Inf),
-                     pcg_jacobi = list(tol = 1e-8, maxit = 1000L),
-                     pcg = list(tol = 1e-8, maxit = 1000L),
-                     block_cg = list(tol = 1e-8, maxit = 1000L),
                      stop("Unknown solver: ", solver))
 
   if (identical(solver, "amg") && !is.null(solver_control))
@@ -330,7 +338,7 @@
 
 .terradish_solver_setup <- function(s, conductance, solver, solver_control = NULL, solver_reuse_state = NULL)
 {
-  requested_solver <- match.arg(solver, c("direct", "auto", "amg", "pcg", "pcg_jacobi", "block_cg"))
+  requested_solver <- match.arg(solver, c("direct", "auto", "amg"))
   resolution <- .terradish_resolve_solver(s, requested_solver, length(conductance), solver_control = solver_control)
   solver <- resolution$type
   control <- .normalize_solver_control(solver, resolution$solver_control)
@@ -561,46 +569,63 @@
                 warm_start = out$solution))
   }
 
-  rhs <- as.matrix(rhs)
-  if (!is.null(warm_start))
-    warm_start <- as.matrix(warm_start)
-  solver_fun <- switch(solver_state$type,
-                       pcg = pcg_reduced_laplacian_ic,
-                       pcg_jacobi = pcg_reduced_laplacian,
-                       block_cg = block_cg_reduced_laplacian,
-                       stop("Unknown solver type: ", solver_state$type))
-  out <- solver_fun(rhs,
-                    solver_state$conductance,
-                    solver_state$edge_pairs,
-                    x0 = warm_start,
-                    tol = solver_state$control$tol,
-                    maxit = as.integer(solver_state$control$maxit))
-  if (!all(out$converged))
-    stop(toupper(solver_state$type), " solver failed to converge for ", sum(!out$converged), " RHS column(s)")
-  list(solution = out$solution,
-       info = c(list(type = solver_state$type,
-                     converged = out$converged,
-                     iterations = out$iterations,
-                     residual_norm = out$residual_norm,
-                     target_tol = solver_state$control$tol,
-                     target_maxit = solver_state$control$maxit),
-                common_info),
-       warm_start = out$solution)
+  stop("Unknown solver type: ", solver_state$type)
 }
 
-.terradish_algorithm_derivative_results <- function(idx, state, cores, worker_libpaths = .libPaths())
+.terradish_new_worker_pool <- function(cores, worker_libpaths = .libPaths())
+{
+  pool <- new.env(parent = emptyenv())
+  pool$cores <- as.integer(cores)
+  pool$worker_libpaths <- worker_libpaths
+  pool$cluster <- NULL
+  pool
+}
+
+.terradish_worker_pool_cluster <- function(pool, workers)
+{
+  stopifnot(is.environment(pool))
+  workers <- as.integer(workers)
+  if (!is.null(pool$cluster) && length(pool$cluster) != workers)
+  {
+    try(parallel::stopCluster(pool$cluster), silent = TRUE)
+    pool$cluster <- NULL
+  }
+  if (is.null(pool$cluster))
+  {
+    pool$cluster <- parallel::makeCluster(workers)
+    worker_libpaths <- pool$worker_libpaths
+    parallel::clusterExport(pool$cluster, "worker_libpaths", envir = environment())
+    parallel::clusterEvalQ(pool$cluster, {
+      .libPaths(worker_libpaths)
+      library(terradish)
+      NULL
+    })
+  }
+  pool$cluster
+}
+
+.terradish_stop_worker_pool <- function(pool)
+{
+  if (is.environment(pool) && !is.null(pool$cluster))
+  {
+    try(parallel::stopCluster(pool$cluster), silent = TRUE)
+    pool$cluster <- NULL
+  }
+  invisible(NULL)
+}
+
+.terradish_algorithm_derivative_results <- function(idx, state, cores,
+                                                     worker_libpaths = .libPaths(),
+                                                     worker_pool = NULL)
 {
   n_workers <- min(as.integer(cores), length(idx))
   splits <- split(idx, cut(idx, breaks = n_workers, labels = FALSE))
-  cl <- makeCluster(length(splits))
-  on.exit(stopCluster(cl), add = TRUE)
-
-  clusterExport(cl, varlist = c("worker_libpaths"), envir = environment())
-  clusterEvalQ(cl, {
-    .libPaths(worker_libpaths)
-    library(terradish)
-    NULL
-  })
+  if (is.null(worker_pool))
+  {
+    worker_pool <- .terradish_new_worker_pool(n_workers, worker_libpaths)
+    on.exit(.terradish_stop_worker_pool(worker_pool), add = TRUE)
+  }
+  cl <- .terradish_worker_pool_cluster(worker_pool, length(splits))
 
   chunks <- parLapply(cl, splits, .terradish_algorithm_derivative_chunk, state = state)
   out <- unlist(chunks, recursive = FALSE)
@@ -663,8 +688,8 @@
 #'   scale-aware and spline conductance models whose second derivatives are
 #'   expensive or unstable. The number of linear solves is the same as for the
 #'   exact Hessian.
-#' @param solver Linear-system solver used for the reduced Laplacian. \code{"direct"} uses the cached sparse Cholesky factorization, \code{"auto"} conservatively chooses between the direct and AMG backends based on graph size and right-hand-side count, \code{"amg"} uses smoothed-aggregation algebraic multigrid preconditioned conjugate gradients, \code{"pcg"} uses incomplete-Cholesky preconditioned conjugate gradients, and \code{"pcg_jacobi"} keeps the older Jacobi-preconditioned prototype.
-#' @param solver_control Optional named list of solver settings. For \code{solver = "direct"}, supported entries include \code{factorization} (\code{"auto"}, \code{"simplicial_ldl"}, \code{"simplicial_ll"}, or \code{"supernodal_ll"}), \code{solve_backend} (\code{"matrix"} or the experimental \code{"cholmod_cpp"} and \code{"cholmod_cpp_cached"} backends), \code{supernodal_min_vertices}, \code{supernodal_max_rhs}, and \code{perm}. For \code{solver = "auto"}, supported selection entries include \code{auto_direct_max_vertices}, \code{auto_amg_min_vertices}, and \code{auto_direct_max_rhs}. For \code{solver = "amg"}, supported entries include \code{tol}, \code{maxit}, \code{coarse_enough}, \code{npre}, \code{npost}, \code{sa_relax}, \code{aggr_eps_strong}, \code{estimate_spectral_radius}, \code{power_iters}, and \code{reuse_preconditioner}. For \code{solver = "pcg"} or \code{"pcg_jacobi"}, supported entries are \code{tol} and \code{maxit}.
+#' @param solver Linear-system solver. \code{"direct"} uses sparse Cholesky, \code{"amg"} uses algebraic multigrid, and \code{"auto"} chooses between them.
+#' @param solver_control Optional named list of solver settings. For \code{solver = "direct"}, supported entries include \code{factorization} (\code{"auto"}, \code{"simplicial_ldl"}, \code{"simplicial_ll"}, or \code{"supernodal_ll"}), \code{solve_backend} (\code{"matrix"} or the experimental \code{"cholmod_cpp"} and \code{"cholmod_cpp_cached"} backends), \code{supernodal_min_vertices}, \code{supernodal_max_rhs}, and \code{perm}. For \code{solver = "auto"}, supported selection entries include \code{auto_direct_max_vertices}, \code{auto_amg_min_vertices}. The legacy \code{auto_direct_max_rhs} is ignored. For \code{solver = "amg"}, supported entries include \code{tol}, \code{maxit}, \code{coarse_enough}, \code{npre}, \code{npost}, \code{sa_relax}, \code{aggr_eps_strong}, \code{estimate_spectral_radius}, \code{power_iters}, and \code{reuse_preconditioner}.
 #'   \code{reuse_preconditioner_max_age} can be set to a finite nonnegative
 #'   value to periodically rebuild the AMG hierarchy instead of reusing it
 #'   indefinitely.
@@ -682,12 +707,19 @@
 #'   \code{terradish_algorithm()} call. This is used to reuse AMG hierarchy
 #'   information or compatible direct CHOLMOD factorization state across nearby
 #'   evaluations.
+#' @param measurement_control Optional \code{\link{NewtonRaphsonControl}} object
+#'   used to profile nuisance parameters. The default retains the package's
+#'   high-accuracy profiling tolerances.
+#' @param worker_pool Optional reusable worker pool created internally by
+#'   \code{\link{terradish}}. Most users should leave this as \code{NULL}.
 #'
 #' @return A list containing at a minimum:
 #'  \item{covariance}{rows/columns of the generalized inverse of the graph Laplacian for a subset of target vertices}
 #' Additionally, if 'objective == TRUE':
 #'  \item{objective}{(if 'objective') the negative loglikelihood}
 #'  \item{phi}{(if 'objective') fitted values of the nuisance parameters of 'g'}
+#'  \item{subproblem}{(if 'objective') convergence code and iteration count
+#'    for the nuisance-parameter profile}
 #'  \item{boundary}{(if 'objective') is the solution on the boundary (e.g. no genetic structure)?}
 #'  \item{fitted}{(if 'objective') matrix of expected genetic distances among target vertices}
 #'  \item{gradient}{(if 'gradient') gradient of negative loglikelihood with respect to theta}
@@ -714,7 +746,7 @@
 #'
 #' }
 #' @export
-terradish_algorithm <- function(f, g, s, S, theta, nu = NULL, phi = NULL, objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE, cores = 1L, curvature = c("exact", "gauss_newton"), solver = c("direct", "auto", "amg", "pcg", "pcg_jacobi", "block_cg"), solver_control = NULL, solver_warm_start = NULL, solver_reuse_state = NULL)
+terradish_algorithm <- function(f, g, s, S, theta, nu = NULL, phi = NULL, objective = TRUE, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE, cores = 1L, curvature = c("exact", "gauss_newton"), solver = c("direct", "auto", "amg"), solver_control = NULL, solver_warm_start = NULL, solver_reuse_state = NULL, measurement_control = NULL, worker_pool = NULL)
 {
   stopifnot(inherits(f, c("terradish_conductance_model",
                           "radish_conductance_model")))
@@ -756,17 +788,21 @@ terradish_algorithm <- function(f, g, s, S, theta, nu = NULL, phi = NULL, object
   {
     # measurement model
     E_dense <- as.matrix(E)
+    if (is.null(measurement_control))
+      measurement_control <- NewtonRaphsonControl(verbose = FALSE,
+                                                   ftol = 1e-10,
+                                                   ctol = 1e-10)
     subproblem <- radish_subproblem(g = g, E = E_dense, S = S, nu = nu, phi = phi,
                                     nonnegative = nonnegative,
-                                    control = NewtonRaphsonControl(verbose = FALSE, 
-                                                                   ftol = 1e-10, 
-                                                                   ctol = 1e-10))
+                                    control = measurement_control)
     phi        <- subproblem$phi
     loglik     <- subproblem$loglikelihood
 
     # gradient calculation
     grad      <- rep(0, length(theta))
     hess      <- matrix(0, length(theta), length(theta))
+    phi_sensitivity <- matrix(0, length(phi), length(theta),
+                               dimnames = list(rownames(phi), names(theta)))
     partial_X <- NULL
     partial_S <- NULL
     if (gradient || hessian || partial)
@@ -818,7 +854,8 @@ terradish_algorithm <- function(f, g, s, S, theta, nu = NULL, phi = NULL, object
             idx = idx,
             state = derivative_state,
             cores = cores,
-            worker_libpaths = .libPaths()
+            worker_libpaths = .libPaths(),
+            worker_pool = worker_pool
           )
         }
         else
@@ -847,6 +884,7 @@ terradish_algorithm <- function(f, g, s, S, theta, nu = NULL, phi = NULL, object
         {
           k <- res$k
           hess[k, ] <- res$hess_row
+          phi_sensitivity[, k] <- res$phi_sensitivity
           if (partial)
           {
             partial_X[, k, ] <- res$partial_X_k
@@ -906,13 +944,19 @@ terradish_algorithm <- function(f, g, s, S, theta, nu = NULL, phi = NULL, object
   list (covariance    = E,
          objective     = if(!objective) NULL else loglik,
          phi           = if(!objective) NULL else phi,
+         subproblem    = if(!objective) NULL else
+           list(convergence = subproblem$convergence,
+                iters = subproblem$iters),
          phi_hessian   = if(!objective) NULL else subproblem$fit$hessian,
-         boundary      = if(!objective) NULL else subproblem$boundary, # the solution is on the boundary (e.g. no genetic structure) so all derivatives wrt theta are 0
+         phi_sensitivity = if(!objective || !hessian) NULL else phi_sensitivity,
+         boundary      = if(!objective) NULL else subproblem$boundary,
+         no_structure_boundary = if(!objective) NULL else subproblem$no_structure_boundary,
+         rho_boundary = if(!objective) NULL else subproblem$fit$rho_boundary,
          fitted        = if(!objective) NULL else subproblem$fit$fitted,
-         gradient      = if(!gradient)  NULL else grad * (1 - subproblem$boundary), # wrt theta
-        hessian       = if(!hessian)   NULL else hess * (1 - subproblem$boundary), # wrt theta
-        partial_X     = if(!partial)   NULL else partial_X * (1 - subproblem$boundary), # partial_X[i,l,k] is \frac{\partial^2 L(theta,x)}{\partial theta_l \partial x_{ik}}
-         partial_S     = if(!partial)   NULL else partial_S * (1 - subproblem$boundary), # partial_S[i,j,k] is \frac{\partial^2 L(theta,x)}{\partial theta_k \partial S_{ij}}
+         gradient      = if(!gradient) NULL else grad * (1 - subproblem$no_structure_boundary),
+         hessian       = if(!hessian) NULL else hess * (1 - subproblem$no_structure_boundary),
+         partial_X     = if(!partial) NULL else partial_X * (1 - subproblem$no_structure_boundary),
+         partial_S     = if(!partial) NULL else partial_S * (1 - subproblem$no_structure_boundary),
          num_gradient  = if(!validate)  NULL else num_gradient,
          num_hessian   = if(!validate)  NULL else num_hessian,
          num_partial_X = if(!validate)  NULL else num_partial_X,

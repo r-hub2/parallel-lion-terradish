@@ -6,9 +6,9 @@ knitr::opts_chunk$set(
   fig.height = 5,
   warning   = FALSE,
   message   = FALSE,
-  # The complete rendered vignette is built into the source tarball. Avoid
-  # repeating its long model fits on CRAN's shared check machines.
-  eval = identical(tolower(Sys.getenv("NOT_CRAN")), "true")
+  # Evaluate fits during ordinary builds so the source tarball includes
+  # the complete rendered guide and its figures.
+  eval = TRUE
 )
 
 
@@ -19,10 +19,10 @@ library(terradish)
 x_seq <- seq(-2, 2, length.out = 300)
 
 # Natural spline basis with df = 4
-B_ns <- ns(x_seq, df = 4)
+B_ns <- scale(ns(x_seq, df = 4), center = TRUE, scale = FALSE)
 
 # B-spline basis with k = 4 columns, degree 3 (cubic)
-B_bs <- bs(x_seq, df = 4, degree = 3)
+B_bs <- scale(bs(x_seq, df = 4, degree = 3), center = TRUE, scale = FALSE)
 
 par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
 
@@ -32,7 +32,7 @@ matplot(x_seq, B_ns, type = "l", lty = 1, lwd = 2,
         main = "Natural spline (ns, df = 4)",
         ylim = c(-0.4, 1))
 abline(h = 0, col = "grey70", lty = 2)
-legend("topright", legend = paste0("basis ", 1:4),
+legend("topleft", legend = paste0("basis ", 1:4),
        col = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"),
        lty = 1, lwd = 2, bty = "n", cex = 0.8)
 
@@ -42,7 +42,7 @@ matplot(x_seq, B_bs, type = "l", lty = 1, lwd = 2,
         main = "B-spline (bs, df = 4, degree = 3)",
         ylim = c(-0.4, 1))
 abline(h = 0, col = "grey70", lty = 2)
-legend("topright", legend = paste0("basis ", 1:4),
+legend("topleft", legend = paste0("basis ", 1:4),
        col = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"),
        lty = 1, lwd = 2, bty = "n", cex = 0.8)
 
@@ -218,6 +218,26 @@ aic_table(
   AICc = TRUE
 )
 
+## ----spline-cv, eval = FALSE--------------------------------------------------
+# # Center a local distance projection on the sampled Brazilian sites.
+# lonlat <- terra::crds(terra::project(melip.coords, "EPSG:4326"))
+# local_crs <- sprintf("+proj=aeqd +lat_0=%f +lon_0=%f +datum=WGS84 +units=m",
+#                      mean(lonlat[, 2]), mean(lonlat[, 1]))
+# coords_projected <- terra::project(melip.coords, local_crs)
+# folds <- terradish_folds(coords_projected, k = 5, seed = 42)
+# cv_shape <- terradish_cv_folds(
+#   data = surface,
+#   formulas = list(linear = melip.Fst ~ forestcover + altitude,
+#     spline = melip.Fst ~ forestcover + s(altitude, df = 4)),
+#   folds = folds, model = mlpe, nuisance = "fixed",
+#   conductance_model = list(linear = loglinear_conductance,
+#                            spline = smooth_loglinear_conductance)
+# )
+# cv_shape$summary
+
+## ----monotonicity-------------------------------------------------------------
+summary(fit_ns_alt)$spline_monotonicity
+
 ## ----marginal-ns-vs-bs, fig.cap = "***Altitude marginal association on the conductance scale.*** Left: natural spline (ns). Right: B-spline (bs). Both use df/k = 4 and degree 3.", fig.height = 4.5----
 library(ggplot2)
 
@@ -268,26 +288,26 @@ p_resp_bs <- plot(fit_bs_alt, type = "marginal_response", data = surface,
 
 p_resp_ns | p_resp_bs
 
-## ----spline-support-clamp, eval = FALSE---------------------------------------
-# plot(
-#   fit_ns_alt,
-#   type = "marginal",
-#   data = surface,
-#   n = 80,
-#   support = "focal",
-#   support_probs = c(0.01, 0.99),
-#   clamp_covariates = "altitude"
-# )
-# 
-# cond_ns_alt_focal <- conductance(
-#   surface,
-#   fit_ns_alt,
-#   support = "focal",
-#   support_probs = c(0.01, 0.99),
-#   clamp_covariates = c("altitude", "forestcover")
-# )
+## ----spline-support-clamp-----------------------------------------------------
+plot(
+  fit_ns_alt,
+  type = "marginal",
+  data = surface,
+  n = 80,
+  support = "focal",
+  support_probs = c(0.01, 0.99),
+  clamp_covariates = "altitude"
+)
 
-## ----obs-vs-fitted, fig.cap = "***Observed vs. fitted pairwise Fst for all candidate models.*** Each point is a pair of sampling sites. The diagonal (dashed) represents a perfect fit.", fig.height = 5----
+cond_ns_alt_focal <- conductance(
+  surface,
+  fit_ns_alt,
+  support = "focal",
+  support_probs = c(0.01, 0.99),
+  clamp_covariates = c("altitude", "forestcover")
+)
+
+## ----obs-vs-fitted, fig.cap = "***Observed pairwise Fst versus fitted resistance for all candidate models.*** Each point is a pair of sampling sites. The blue line is a descriptive least-squares regression.", fig.height = 5----
 p_fit_linear <- plot(fit_linear,  type = "fit", main = "Linear baseline")
 p_fit_ns_alt <- plot(fit_ns_alt,  type = "fit", main = "Altitude ns (df = 4)")
 p_fit_ns_both <- plot(fit_ns_both, type = "fit", main = "Both ns (df = 4)")
@@ -517,34 +537,27 @@ aic_table(
 #   approximation_control = rec$approximation_control
 # )
 # 
-# # Step 4: Compare with AICc
-# aic_table(list(fit_linear, fit_spline),
-#           mod_names = c("Linear", "Spline df=3"),
-#           AICc = TRUE)
+# # Step 4: Compare the predeclared shapes on the same folds.
+# folds <- terradish_folds(coords_projected, k = 5, seed = 42)
+# cv <- terradish_cv_folds(
+#   surface,
+#   formulas = list(linear = S ~ covar2 + covar1,
+#                   spline = S ~ covar2 + s(covar1, df = 3)),
+#   folds = folds, model = mlpe, nuisance = "fixed",
+#   conductance_model = list(linear = loglinear_conductance,
+#                            spline = smooth_loglinear_conductance)
+# )
+# cv$summary
 # 
-# # Step 5: Inspect the spline marginal association
+# # Step 5: Inspect the fitted shape and its derivative sign changes.
+# summary(fit_spline)$spline_monotonicity
 # plot(fit_spline, type = "marginal", data = surface)
 # 
-# # Step 6: If AICc improved and the curve is plausible, try more flexibility
-# fit_spline4 <- terradish(
-#   S ~ covar2 + s(covar1, df = 4),
-#   data              = surface,
-#   conductance_model = smooth_loglinear_conductance,
-#   measurement_model = mlpe,
-#   optimizer         = rec$optimizer,
-#   control           = rec$control,
-#   solver            = rec$solver,
-#   solver_control    = rec$solver_control,
-#   approximation     = rec$approximation,
-#   approximation_control = rec$approximation_control
-# )
-# 
-# aic_table(list(fit_linear, fit_spline, fit_spline4),
-#           mod_names = c("Linear", "df=3", "df=4"),
-#           AICc = TRUE)
+# # Step 6: Prefer the simpler model if predictive differences are inconclusive.
+# # Add larger-df models only as a declared sensitivity analysis, not an AIC search.
 # 
 # # Step 7: Visualize the selected model
-# best_fit <- fit_spline  # or whichever won
+# best_fit <- fit_spline  # choose after reviewing CV, convergence, and shape
 # plot(best_fit, type = "fit",             data = surface)
 # plot(best_fit, type = "surface",         data = surface)
 # plot(best_fit, type = "marginal",        data = surface)
@@ -554,7 +567,7 @@ aic_table(
 # # Quick eigenvalue check: are estimated parameters degenerate?
 # hess <- fit_ns_alt$fit$hessian
 # ev <- eigen(hess, symmetric = TRUE, only.values = TRUE)$values
-# min(ev)   # Should be clearly positive; near-zero → numerical problems
+# min(ev)   # Should be clearly positive; near-zero values indicate numerical problems
 # 
 # # Compare ns and bs marginal shapes side by side
 # par(mfrow = c(1, 2))

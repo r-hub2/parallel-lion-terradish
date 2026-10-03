@@ -1,3 +1,174 @@
+terradish 1.0.0
+
+----------------
+* First CRAN release candidate of the supported symmetric resistance core.
+  Directed, hierarchical, drift, selected-pair, Kron, block-CG, and legacy
+  cross-validation prototypes remain on the experimental branch.
+* Fit log-linear, fixed-degree spline, and Gaussian-scale conductance with MLPE
+  or site-contrast Wishart responses. Use exact direct or AMG graph solvers.
+* Added fixed-domain spatial cross-validation, Gaussian scale profiles,
+  covariance and interval methods, convergence records, and effective Wishart
+  information sensitivity tools.
+* Corrected Gaussian alignment and scale units, covariance centering, spline
+  prediction, optimizer stopping, and model-selection sample sizes. BIC and
+  `nobs()` use the number of focal sites rather than site pairs.
+* Rebuilt the core documentation around model interpretation, response
+  assumptions, predictive comparison, and limits on causal inference.
+
+terradish 0.0.62
+----------------
+* `aic_table(BIC = TRUE)` now uses the number of focal sites (individuals or
+  populations) as the BIC sample size, matching AICc. It previously used the
+  number of site pairs, which are not independent observations. BIC values
+  and, potentially, BIC rankings change.
+* `nobs()` now returns the number of focal sites instead of the number of site
+  pairs, so `stats::BIC()` agrees with `aic_table(BIC = TRUE)`.
+* Updated the inference help, the model-comparison guide, and tests to the new
+  convention.
+
+terradish 0.0.61
+
+----------------
+* Clarified that Gaussian raster pre-scaling is unnecessary with internal
+  standardization, but does not change its smoothed standardized values.
+* Corrected the matched Wishart covariance and squared-distance help to state
+  that their implemented contrast objectives agree numerically.
+* Added a regression test for Gaussian pre-scaling equivalence.
+
+terradish 0.0.60
+----------------
+* Bound Gaussian factory settings when the factory is created. Factories built
+  in a loop now retain their own raster choices, smoothing bounds,
+  standardization setting, and scale conversion factor.
+
+terradish 0.0.59
+----------------
+* Fixed `covariance_response_power()` so Gaussian-scale truths generate
+  responses at the reported map-unit smoothing width. Previously the width
+  was divided by cell width twice, invalidating Gaussian power and recovery
+  results when cells were not one map unit wide.
+
+terradish 0.0.58
+----------------
+* Repaired corrupted mathematical symbols in the model-comparison and spline
+  guides, and standardized coefficient and subscript notation across the docs.
+* Corrected the MLPE covariate equation's row-vector product, typeset Gaussian
+  kernel distances, and clarified the likelihood-ratio reference conditions.
+* Rebuilt all eight vignettes and checked rendered equations and function help.
+
+terradish 0.0.57
+----------------
+* Added fast analytic-derivative and AMG agreement tests that run on CRAN.
+* Recorded final core regression audits and release validation evidence.
+* Corrected the spline fit-plot caption to describe its resistance axis and
+  descriptive regression line.
+* Included computed spline and model-comparison guide outputs in ordinary
+  source builds by removing their old environment-dependent evaluation switch.
+
+terradish 0.0.56
+----------------
+* Rebuilt the eight core guides and README around conditional interpretation,
+  effective Wishart information, predictive comparison, and common pairwise inputs.
+* Replaced unavailable precomputed power sections with explicit reproducible
+  study-design recipes, and removed unverified timing claims.
+* Updated package and citation metadata for the supported core scope.
+
+terradish 0.0.55
+----------------
+* Rewrote Wishart information guidance and documented covariance construction,
+  conditional environmental effects, and inference across plausible nu values.
+* Explained convergence, smoothing-scale bounds, spline shape diagnostics,
+  retained prediction transformations, and model-comparison limits.
+* Added runnable inference, profile, and predictive cross-validation examples,
+  and updated the package overview and spelling dictionary.
+
+terradish 0.0.54
+----------------
+* Changed the default graph neighborhood to eight directions and improved
+  duplicate-site, disconnected-component, cropping, and parallel-worker notices.
+* Selected AMG above the large-graph threshold regardless of the number of
+  right-hand sides.
+* Added stored raster scaling and new-landscape prediction using fitted
+  log-linear terms, spline bases, and Gaussian standardization.
+* Added combined pairwise covariates, spline monotonicity summaries, and
+  separate simulation and fitting information through nu_fit.
+* Warned about within-diagonal covariance responses and rejected missing or
+  invalid Wishart information. Excluded nonconverged fits from power summaries.
+
+terradish 0.0.53
+----------------
+* Added per-formula conductance factories, repeated folds, paired comparisons,
+  and input signatures that prevent incompatible checkpoint resumption.
+* Added fixed-nuisance predictive scoring for measurement-model comparisons
+  within a likelihood family, including valid no-structure boundary fits.
+* Reported failed folds explicitly, kept incomplete totals unavailable, and
+  ranked models on common successful folds. Recorded baseline failures
+  separately from valid model scores.
+* Corrected the uniform baseline for Gaussian and spline comparisons.
+
+terradish 0.0.52
+----------------
+* Added covariance, confidence interval, observation-count, Wishart nu
+  sensitivity, Gaussian scale profile, and IBE ratio methods.
+* Recorded convergence and boundary diagnostics, tightened optimizer stopping,
+  checked likelihood-ratio nesting, and reported environmental boundary tests.
+* Corrected active-bound Newton steps and MLPE nuisance warm starts. Stabilized
+  MLPE correlation calculations near their bounds without relaxing tolerances.
+* Preserved identified conductance parameters at zero environmental effects,
+  and included conductance uncertainty in joint nuisance-ratio uncertainty.
+
+terradish 0.0.51
+----------------
+* Corrected even-grid Gaussian alignment, limited default scale bounds to
+  three-sigma kernel support, and warned about larger truncated kernels.
+* Fitted covariance Wishart models on site contrasts and centered their
+  covariance residuals, matching the covariance-derived distance likelihood.
+* Reused fitted spline knots and centering in prediction, plotting, and exact
+  refinement. Centered each spline basis over its active fitting graph.
+* Unified joint, outer-search, and simulation Gaussian scales in map units.
+  Outer search now defaults to the terradish kernel and counts estimated
+  scales in degrees of freedom and AIC.
+* Scaled raster layers independently in scale_to_0_1(), preserving missing
+  values and mapping constant layers to zero.
+* Rebuilt Wishart environmental kernels from the same pairwise differences
+  used by MLPE, without implicit variance normalization. Added transform
+  choices, PSD checks, and consistent site-subset reconstruction.
+* Required landgraph 0.0.3, with truthful covariance metadata and the
+  owner-approved gower default for grouped genetic covariance.
+
+terradish 0.0.50
+----------------
+* Restricted the core package to supported undirected models, direct/auto/AMG
+  solvers, and approximations followed by exact refinement. Experimental
+  models, solvers, legacy cross-validation, and result helpers remain preserved
+  on the experimental branch.
+* Updated exports, examples, and tests to enforce the core scope.
+
+terradish 0.0.49
+----------------
+* Relocated shared comparison, cross-validation, and matrix helpers without
+  changing their behavior, preparing the core package split.
+
+terradish 0.0.48
+----------------
+* Recorded the core-release plan, reproducible numerical baselines, and original
+  package validation. Preserved the existing vignette paragraph formatting.
+
+terradish 0.0.47
+----------------
+* Added fixed-domain cross-validation with reproducible spatial or balanced
+  random folds, per-fold nuisance profiling, uniform-conductance baseline
+  scores, checkpoint files, and optional slim fit retention. The documentation
+  states the likelihood-family boundary for interpreting held-out scores.
+* Added `slim_terradish()` and `terradish(..., slim = TRUE)` for removing model
+  closures and other optional large components before serialization while
+  retaining coefficient and likelihood summaries.
+* Reused one PSOCK worker pool across derivative evaluations within a Windows
+  fit instead of starting a new cluster at every evaluation.
+* Added `measurement_control` for the inner nuisance profile and recorded its
+  final convergence code and iteration count, with guidance for smooth
+  generalized-Wishart models.
+
 terradish 0.0.46
 ---------
 * Reconciled the package overview, function help, examples, vignettes, and

@@ -202,6 +202,9 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
   control <- if (is.null(control)) list() else as.list(control)
   defaults <- .terradish_landmark_control_defaults()
   control <- modifyList(defaults, control)
+  if (!isTRUE(control$exact_refine))
+    stop("Unrefined approximations are not supported in the terradish core; available on the experimental branch.",
+         call. = FALSE)
 
   requested <- control$n_landmarks
   if (is.null(requested))
@@ -215,134 +218,6 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
   control$n_landmarks <- as.integer(requested)
   control$method <- match.arg(control$method, c("spacefill", "random", "sequential"))
   control
-}
-
-.terradish_measurement_model_name <- function(model)
-{
-  known <- c("leastsquares", "mlpe", "generalized_wishart", "wishart_covariance")
-  ns_env <- asNamespace("terradish")
-  for (nm in known)
-  {
-    obj <- get0(nm, envir = ns_env, mode = "function", inherits = FALSE)
-    if (!is.null(obj) &&
-        identical(formals(model), formals(obj)) &&
-        identical(body(model), body(obj)))
-      return(nm)
-  }
-
-  base_model <- attr(model, "base_model", exact = TRUE)
-  if (is.character(base_model) && length(base_model) == 1L)
-    return(base_model)
-
-  NULL
-}
-
-.terradish_measurement_family <- function(model_name)
-{
-  if (!is.character(model_name) || length(model_name) != 1L)
-    return(NULL)
-
-  switch(model_name,
-         leastsquares = "gaussian_distance",
-         mlpe = "gaussian_distance",
-         generalized_wishart = "generalized_wishart_distance",
-         wishart_covariance = "wishart_covariance",
-         NULL)
-}
-
-.terradish_comparison_contract <- function(measurement_model, nu = NULL,
-                                           response = NULL)
-{
-  model_name <- .terradish_measurement_model_name(measurement_model)
-  family <- .terradish_measurement_family(model_name)
-  pairs <- attr(measurement_model, "pairs", exact = TRUE)
-
-  list(
-    measurement_model = model_name,
-    likelihood_family = family,
-    nu = if (isTRUE(grepl("wishart", family, fixed = TRUE))) nu else NULL,
-    response = response,
-    pairs = if (is.null(pairs)) NULL else as.matrix(pairs)
-  )
-}
-
-.terradish_fit_comparison_contract <- function(fit)
-{
-  contract <- fit$comparison
-  if (!is.list(contract))
-    contract <- list()
-
-  measurement_model <- fit$submodels$g
-  if (is.null(contract$measurement_model) && is.function(measurement_model))
-    contract$measurement_model <- .terradish_measurement_model_name(measurement_model)
-  if (is.null(contract$likelihood_family))
-    contract$likelihood_family <- .terradish_measurement_family(contract$measurement_model)
-  if (is.null(contract$response) && !is.null(fit$fit$response))
-    contract$response <- fit$fit$response
-  if (is.null(contract$pairs) && is.function(measurement_model))
-  {
-    pairs <- attr(measurement_model, "pairs", exact = TRUE)
-    if (!is.null(pairs))
-      contract$pairs <- as.matrix(pairs)
-  }
-
-  contract
-}
-
-.terradish_assert_comparable_fits <- function(fits, purpose = c("information criterion",
-                                                                 "likelihood-ratio test"))
-{
-  purpose <- match.arg(purpose)
-  if (length(fits) < 2L)
-    stop("At least two fitted models are required for comparison.", call. = FALSE)
-
-  dim_keys <- vapply(fits, function(x) paste(x$dim, collapse = "|"), character(1))
-  if (length(unique(dim_keys)) != 1L)
-    stop("Models must use the same focal sites and graph dimensions for a valid ",
-         purpose, ".", call. = FALSE)
-
-  contracts <- lapply(fits, .terradish_fit_comparison_contract)
-  families <- vapply(contracts,
-                     function(x) if (is.null(x$likelihood_family)) NA_character_ else x$likelihood_family,
-                     character(1))
-  known_families <- unique(stats::na.omit(families))
-  if (anyNA(families))
-    stop("Could not identify every model's likelihood family, so a valid ",
-         purpose, " cannot be verified. Use a built-in measurement model or set ",
-         "its `base_model` attribute to the corresponding built-in model.",
-         call. = FALSE)
-  if (length(known_families) > 1L)
-    stop("Models use different likelihood families. Do not compare Gaussian distance, ",
-         "generalized-Wishart distance, and covariance-Wishart fits by ", purpose, ".",
-         call. = FALSE)
-
-  responses <- lapply(contracts, `[[`, "response")
-  have_responses <- !vapply(responses, is.null, logical(1))
-  if (all(have_responses) &&
-      !all(vapply(responses[-1L], identical, logical(1), responses[[1L]])))
-    stop("Models must use the same response matrix for a valid ", purpose, ".",
-         call. = FALSE)
-
-  pairs <- lapply(contracts, `[[`, "pairs")
-  have_pairs <- !vapply(pairs, is.null, logical(1))
-  if (any(have_pairs) &&
-      (!all(have_pairs) || !all(vapply(pairs[-1L], identical, logical(1), pairs[[1L]]))))
-    stop("Models must use the same selected pairs for a valid ", purpose, ".",
-         call. = FALSE)
-
-  is_wishart <- grepl("wishart", families, fixed = TRUE)
-  if (any(is_wishart, na.rm = TRUE))
-  {
-    nu <- vapply(contracts, function(x) {
-      if (is.null(x$nu) || length(x$nu) != 1L) NA_real_ else as.numeric(x$nu)
-    }, numeric(1))
-    known_nu <- unique(nu[is.finite(nu)])
-    if (length(known_nu) > 1L)
-      stop("Wishart models must use the same effective degrees of freedom (`nu`) for a valid ",
-           purpose, ".", call. = FALSE)
-  }
-
-  invisible(contracts)
 }
 
 .deme_coordinates <- function(data)
@@ -633,10 +508,9 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' @param nu Effective Wishart degrees of freedom passed to measurement models
 #'   that require it, such as \code{\link{generalized_wishart}} and
 #'   \code{\link{wishart_covariance}}. It must be supplied and is not estimated.
-#'   For biallelic SNPs, use the number of approximately independent retained
-#'   SNPs. For microsatellites, use the number of loci as the conservative
-#'   primary value and examine larger plausible values in a sensitivity
-#'   analysis. Ignored by non-Wishart measurement models.
+#'   It controls effective information, not a marker count. Report sensitivity
+#'   across plausible values with \code{\link{terradish_rescale_nu}}.
+#'   Ignored by non-Wishart measurement models.
 #' @param theta Starting values for optimization
 #' @param leverage Compute influence measures and leverage?
 #' @param nonnegative Force regression-like \code{measurement_model} to have nonnegative slope?
@@ -664,7 +538,22 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #'   \code{control = NewtonRaphsonControl(ls.control = HagerZhangControl(verbose = TRUE))}.
 #' @param control A list containing options for the optimization routine (see \code{\link{NewtonRaphsonControl}} for list)
 #' @param validate Numerical validation of leverage via package \code{numDeriv} (very slow, use for debugging small examples)
-#' @param cores Number of worker processes to use for Hessian and leverage calculations. \code{1} evaluates serially.
+#' @param cores Number of worker processes. \code{1} evaluates serially.
+#'   Parallel execution is experimental and uses PSOCK workers on every
+#'   operating system. Only Hessian and partial solves run in parallel; AMG
+#'   and cached CHOLMOD ignore this setting. Multiple workers can be slower
+#'   on small graphs. A one-time message explains these limits when applicable.
+#'   On Windows, one PSOCK cluster is retained for the duration of the fit
+#'   instead of being rebuilt for every derivative evaluation.
+#' @param measurement_control Optional \code{\link{NewtonRaphsonControl}} object
+#'   for the inner nuisance-parameter profile. This is separate from
+#'   \code{control}, which governs optimization of the conductance parameters.
+#'   The fitted object records the inner optimizer's convergence code and
+#'   iteration count for the final evaluation.
+#' @param slim Logical. If \code{TRUE}, apply \code{\link{slim_terradish}} to
+#'   the returned fit, removing model closures and leverage arrays. Use this for
+#'   durable storage only when later conductance prediction and model
+#'   reevaluation are unnecessary.
 #' @param curvature Curvature used for optimization steps and for the returned
 #'   covariance matrix. \code{"exact"} (default) uses the exact Hessian.
 #'   \code{"gauss_newton"} uses an information-based approximation that drops
@@ -675,7 +564,10 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #'   Standard errors from \code{summary()} are then the asymptotic
 #'   information-based errors. With \code{leverage = TRUE} the leverage
 #'   diagnostics inherit the same approximation.
-#' @param solver Linear-system solver used for the reduced Laplacian. \code{"direct"} uses sparse Cholesky updates; \code{"auto"} conservatively chooses between the direct and AMG backends based on graph size and right-hand-side count; \code{"amg"} uses smoothed-aggregation AMG-preconditioned conjugate gradients; \code{"pcg"} uses incomplete-Cholesky preconditioned conjugate gradients; \code{"pcg_jacobi"} keeps the older Jacobi-preconditioned prototype.
+#' @param solver Linear-system solver. \code{"direct"} uses sparse Cholesky,
+#'   \code{"amg"} uses algebraic multigrid, and \code{"auto"} chooses AMG
+#'   above the large-graph threshold regardless of the number of right-hand
+#'   sides. AMG iteration counts can rise with conductance contrast.
 #' @param solver_control Optional named list of solver settings passed to
 #'   \code{\link{terradish_algorithm}}. For \code{solver = "direct"}, supported
 #'   entries include \code{factorization}, \code{supernodal_min_vertices},
@@ -684,7 +576,8 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #'   \code{"cholmod_cpp_cached"} backends.
 #'   For \code{solver = "auto"}, supported selection entries include
 #'   \code{auto_direct_max_vertices},
-#'   \code{auto_amg_min_vertices}, and \code{auto_direct_max_rhs}. For
+#'   \code{auto_amg_min_vertices}. The legacy \code{auto_direct_max_rhs}
+#'   setting is accepted but no longer affects selection. For
 #'   \code{solver = "amg"} or \code{"auto"}, \code{terradish()} also
 #'   understands an adaptive schedule with entries such as \code{adaptive},
 #'   \code{tol_early}, \code{tol_mid}, \code{tol_final}, \code{maxit_early},
@@ -706,11 +599,11 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #'   optimizes first on a space-filling subset of focal populations and then
 #'   refines on the full likelihood when supported by the measurement model.
 #'   \code{"coarse_raster"} optimizes first on an aggregated raster and then
-#'   optionally refines on the full-resolution graph. If multiple coarse
+#'   refines on the full-resolution graph. If multiple coarse
 #'   factors are supplied, they are evaluated from coarsest to finest before the
 #'   final full-resolution stage. This is an opt-in warm-start strategy, not a
-#'   replacement for the exact full-resolution likelihood unless
-#'   \code{exact_refine = FALSE}.
+#'   replacement for the exact full-resolution likelihood. Exact refinement
+#'   is required.
 #' @param approximation_control Optional named list controlling the landmark or
 #'   coarse-raster approximation. Landmark entries include
 #'   \code{n_landmarks}, \code{fraction}, \code{min_landmarks},
@@ -787,7 +680,10 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' reduce runtime. First, build the graph with
 #' \code{conductance_surface(..., crop_buffer = )} when focal sites occupy only
 #' part of the raster. This removes vertices outside the buffered sampling
-#' extent before fitting. Second, use
+#' extent before fitting. Cropping changes resistance: one sensitivity audit
+#' found increases of 15--23\% with a two-cell buffer and 1--2\% with a
+#' ten-cell buffer. These values are case-specific. Refit with a larger buffer
+#' to assess sensitivity on your landscape. Second, use
 #' \code{approximation = "coarse_raster"} with
 #' \code{approximation_control = list(factor = c(4, 2), exact_refine = TRUE)}
 #' to optimize on one or more aggregated rasters before refining on the original
@@ -795,8 +691,13 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' likelihood are from the full-resolution graph; the coarse fits are only
 #' starting values. To keep the full-resolution cleanup deliberately short, pass
 #' \code{refine_control = NewtonRaphsonControl(maxit = 2, ...)} inside
-#' \code{approximation_control}. With \code{exact_refine = FALSE}, the result is
-#' faster but approximate and should be interpreted as a screening fit.
+#' \code{approximation_control}. Exact refinement is required.
+#'
+#' For spline terms, \code{summary()} reports monotonicity over the covariate
+#' range at the focal sites, including the number of derivative sign changes.
+#' A monotone curve increases or decreases throughout that range; a
+#' nonmonotone curve changes direction. This describes the fitted curve, not
+#' a confidence statement about its shape outside or within that range.
 #'
 #' \strong{Gaussian scale-aware conductance.}
 #' \code{\link{gaussian_smoothed_loglinear_conductance}} can also use
@@ -811,15 +712,33 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' against a reference category). The intercept is excluded if it is not
 #' identifiable.
 #'
-#' If the fit is on the boundary (e.g. no spatial genetic structure) or is the
-#' null model of isolation-by-distance, the fitted object will not contain
-#' influence/leverage/gradient/hessian.
+#' If the resistance contribution is zero, or the formula specifies uniform
+#' conductance, conductance coefficients are not identified and their
+#' influence, gradient, and Hessian are unavailable. A zero environmental
+#' kernel weight does not by itself remove conductance inference.
+#'
+#' \strong{Convergence and starting values.} Inspect \code{fit$convergence}
+#' before interpreting estimates. Code 0 requires a largest absolute projected
+#' gradient below \code{ctol}, or an objective change below \code{ftol} together
+#' with a projected gradient below \code{sqrt(ctol)}. Code 1 means the iteration
+#' limit was reached; code 2 means a stall or failed line search. The projected
+#' gradient ignores components pointing outside active parameter bounds.
+#' The record includes the criterion, iterations, gradient, boundary status,
+#' and whether a restart was attempted. A small objective change alone is not
+#' convergence. Also inspect \code{fit$fit$subproblem$convergence} for nuisance
+#' optimization. Numerical convergence does not establish model adequacy.
+#'
+#' If a user-supplied starting point reaches a no-structure boundary, fitting
+#' retries the default starting point and keeps the better likelihood. Report
+#' starting-value sensitivity when distinct solutions remain plausible.
 #'
 #' @return An object of class \code{terradish} containing the fitted conductance
 #'   parameters, optimized nuisance parameters, log-likelihood, model
 #'   comparison statistics, timing/evaluation diagnostics, and optional
-#'   leverage diagnostics. See \code{\link{terradish_methods}} for the
-#'   available S3 methods.
+#'   leverage diagnostics. The nested \code{fit$subproblem} element records the
+#'   convergence code and iteration count from the final nuisance-parameter
+#'   profile. If \code{slim = TRUE}, a \code{storage} element records what was
+#'   removed. See \code{\link{terradish_methods}} for the available S3 methods.
 #'
 #' @examples
 #' \donttest{
@@ -885,6 +804,7 @@ setRefClass("FunctionCall", fields = list(count = "integer"))
 #' }
 #' @export
 
+#' @template wishart-nu
 terradish <- function(formula, 
                    data,
                    conductance_model = loglinear_conductance, 
@@ -900,11 +820,14 @@ terradish <- function(formula,
                    validate = FALSE,
                    cores = 1L,
                    curvature = c("exact", "gauss_newton"),
-                   solver = c("direct", "auto", "amg", "pcg", "pcg_jacobi", "block_cg"),
+                   solver = c("direct", "auto", "amg"),
                    solver_control = NULL,
                    approximation = c("none", "landmark", "coarse_raster"),
-                   approximation_control = NULL)
+                   approximation_control = NULL,
+                   measurement_control = NULL,
+                   slim = FALSE)
 {
+  requested_leverage <- leverage
   stopifnot(inherits(formula, "formula"))
   stopifnot(inherits(data, c("terradish_graph", "radish_graph")))
   stopifnot(inherits(conductance_model, c("terradish_conductance_model_factory",
@@ -912,6 +835,8 @@ terradish <- function(formula,
   stopifnot(inherits(measurement_model, c("terradish_measurement_model",
                                           "radish_measurement_model")))
   stopifnot(length(cores) == 1, is.numeric(cores), cores >= 1)
+  if (!is.logical(slim) || length(slim) != 1L || is.na(slim))
+    stop("`slim` must be TRUE or FALSE.", call. = FALSE)
   if (!isTRUE(conductance))
     stop("`conductance = FALSE` is not currently supported.", call. = FALSE)
 
@@ -928,6 +853,7 @@ terradish <- function(formula,
     control$verbose <- verbose
   }
   solver <- match.arg(solver)
+  .terradish_parallel_notice(data, cores, solver, solver_control)
   curvature <- match.arg(curvature)
   approximation <- match.arg(approximation)
 
@@ -937,6 +863,8 @@ terradish <- function(formula,
   response <- attr(terms, "response")
   S        <- if(response) eval(attr(terms, "variables")[[response + 1L]], parent.frame())
               else stop("'formula' must have a response matrix on the left-hand side")
+  if (identical(attr(S, "diagonal", exact = TRUE), "within"))
+    warning("This response uses diagonal = 'within', whose diagonal is on another scale. Reconstruct it with diagonal = 'gower' before interpreting covariance fits.", call. = FALSE)
   S        <- .validate_measurement_response(measurement_model, S)
   is_ibd   <- length(vars) == 1
   formula  <- if (!is_ibd) reformulate(attr(terms, "term.labels"))
@@ -956,6 +884,8 @@ terradish <- function(formula,
       is.null(rebuild_conductance_model_for_surface))
     stop("`approximation = \"coarse_raster\"` is not currently supported for this conductance model")
   conductance_model <- conductance_model_factory(formula, data$x)
+  if (isTRUE(attr(conductance_model, "smooth_loglinear", exact = TRUE)))
+    conductance_model_factory <- attr(conductance_model, "plot_factory", exact = TRUE)
   conductance_model_user <- .externalize_conductance_model(conductance_model)
   conductance_supports_partial <- !identical(
     attr(conductance_model, "supports_partial", exact = TRUE),
@@ -976,6 +906,7 @@ terradish <- function(formula,
   if (any(theta < bounds$lower | theta > bounds$upper))
     stop("Starting values in `theta` must lie within the conductance-model bounds",
          call. = FALSE)
+  started_at_default <- isTRUE(all.equal(as.numeric(theta), as.numeric(default)))
 
   optimizer <- .resolve_terradish_optimizer(match.arg(optimizer), length(theta),
                                            conductance_model_factory = conductance_model_factory)
@@ -992,6 +923,12 @@ terradish <- function(formula,
   fcalls    <- new("FunctionCall", count = 0L)
   diagnostics <- .terradish_new_diagnostics()
   control$diagnostics <- diagnostics
+  worker_pool <- if (as.integer(cores) > 1L && .use_namespace_workers())
+    .terradish_new_worker_pool(cores)
+  else
+    NULL
+  if (!is.null(worker_pool))
+    on.exit(.terradish_stop_worker_pool(worker_pool), add = TRUE)
   make_optfn <- function(eval_data,
                          eval_S,
                          phi_state,
@@ -1026,7 +963,9 @@ terradish <- function(formula,
                               solver = solver,
                               solver_control = current_solver_control,
                               solver_warm_start = solver_state$warm_start,
-                              solver_reuse_state = solver_state$reuse_state)
+                              solver_reuse_state = solver_state$reuse_state,
+                              measurement_control = measurement_control,
+                              worker_pool = worker_pool)
       phi_state$value <- fit$phi
       solver_state$warm_start <- fit$solver_warm_start
       solver_state$reuse_state <- fit$solver_reuse_state
@@ -1263,7 +1202,9 @@ terradish <- function(formula,
                           curvature = curvature,
                           solver = solver, solver_control = final_solver_control,
                           solver_warm_start = exact_solver_state$warm_start,
-                          solver_reuse_state = exact_solver_state$reuse_state)
+                          solver_reuse_state = exact_solver_state$reuse_state,
+                          measurement_control = measurement_control,
+                          worker_pool = worker_pool)
   .terradish_record_algorithm_diagnostics(
     diagnostics,
     fit,
@@ -1285,9 +1226,13 @@ terradish <- function(formula,
   if (!is.null(names(theta_external)))
     dimnames(fit$hessian) <- list(names(theta_external), names(theta_external))
 
-  if (fit$boundary)
-    warning("Optimum for subproblem is on boundary (e.g. no spatial genetic structure): cannot optimize theta.\nTry different starting values.")
-  no_coef <- fit$boundary || is_ibd 
+  no_coef <- .no_structure_boundary(fit) || is_ibd
+  # Recover the nuisance block of the joint inverse information. The existing
+  # phi_hessian is conditional on theta; this adds uncertainty from theta.
+  fit$phi_vcov_joint <- .safe_hessian_inverse(fit$phi_hessian)
+  if (!no_coef && !is.null(fit$phi_sensitivity))
+    fit$phi_vcov_joint <- fit$phi_vcov_joint + fit$phi_sensitivity %*%
+      .safe_hessian_inverse(fit$hessian_internal) %*% t(fit$phi_sensitivity)
 
   # calculate leverage for genetic distance and spatial covariates
   leverage <- leverage && !no_coef
@@ -1322,6 +1267,18 @@ terradish <- function(formula,
               cost           = c("newton_steps"   = iters,
                                  "function_calls" = fcalls$count + 1),
               diagnostics    = .terradish_diagnostics_snapshot(diagnostics),
+              gaussian_scale_info = attr(conductance_model, "gaussian_scale_info", exact = TRUE),
+              spline_monotonicity = if (no_coef) NULL else
+                .spline_monotonicity(conductance_model, theta_external, data$x[data$demes, , drop = FALSE]),
+              convergence = list(
+                code = if (is_ibd) 0L else exact_problem$convergence,
+                message = if (is_ibd) "no conductance parameters" else
+                  c("converged", "iteration limit reached", "stalled or line search failed")[exact_problem$convergence + 1L],
+                iterations = iters,
+                max_abs_projected_gradient = if (is_ibd) 0 else exact_problem$max_abs_projected_gradient,
+                criterion = if (is_ibd) "no_conductance_parameters" else exact_problem$criterion,
+                boundary = fit$boundary || (!is_ibd && exact_problem$boundary),
+                restarted = FALSE),
               submodels      = list("f" = conductance_model_user,
                                     "f_internal" = conductance_model,
                                     "f_factory" = conductance_model_factory,
@@ -1348,7 +1305,27 @@ terradish <- function(formula,
                                                            "X" = num_leverage_X))
               )
   class(out) <- c("terradish", "radish")
-  out
+  out$comparison$graph <- .graph_fingerprint(data)
+  out$comparison$measurement_columns <- .measurement_columns(measurement_model)
+  if (.no_structure_boundary(fit) && !started_at_default && !is_ibd) {
+    restart_formula <- reformulate(attr(terms(formula), "term.labels"), response = "S")
+    retry <- terradish(restart_formula, data = data,
+      conductance_model = conductance_model_factory, measurement_model = measurement_model,
+      theta = NULL, nu = nu, control = control, optimizer = optimizer,
+      leverage = requested_leverage, nonnegative = nonnegative,
+      validate = validate, cores = cores, curvature = curvature,
+      solver = solver, solver_control = solver_control, approximation = approximation,
+      approximation_control = approximation_control, measurement_control = measurement_control,
+      verbose = verbose, slim = FALSE)
+    original_call <- out$call
+    if (retry$loglik > out$loglik) out <- retry
+    out$call <- original_call
+    out$convergence$restarted <- TRUE
+  }
+  if (.no_structure_boundary(out$fit))
+    warning("Optimum has no detectable resistance structure; conductance coefficients are not identified.",
+            call. = FALSE)
+  if (isTRUE(slim)) slim_terradish(out) else out
 }
 
 #' Legacy radish fit wrapper
@@ -1396,6 +1373,9 @@ radish <- function(...)
 #' \code{tau} is log precision and its stored \code{rho} is unconstrained; the
 #' actual shared-site correlation is \eqn{\text{plogis}(\rho)/2}. Consult the
 #' selected measurement-model help page before interpreting \code{phi}.
+#' Covariance-response residuals are centered on both site dimensions:
+#' \eqn{H(S-\Sigma)H}, where \eqn{H} is the site-centering matrix. Fitted
+#' covariance matrices retain their full \eqn{n\times n} form.
 #'
 #' \code{anova()} is a likelihood-ratio test for nested conductance formulas
 #' fitted to the same response, sites, graph domain, conductance-model factory,
@@ -1501,7 +1481,7 @@ print.radish <- function(x, digits = max(3L, getOption("digits") - 3L), ...)
 {
   cat("Conductance surface estimated by maximum likelihood\n")
   cat("Call:   ", paste(deparse(x$call), sep = "\n", collapse = "\n"), "\n\n", sep = "")
-  if (!x$fit$boundary && !is.null(x$mle$theta))
+  if (!.no_structure_boundary(x$fit) && !is.null(x$mle$theta))
   {
     cat("Coefficients:\n")
     print.default(format(x$mle$theta, digits = digits), print.gap = 2L, quote = FALSE)
@@ -1512,6 +1492,9 @@ print.radish <- function(x, digits = max(3L, getOption("digits") - 3L), ...)
   }
   cat("\n")
   cat("Loglikelihood:", x$loglik, paste0("(", x$df), "degrees freedom)   AIC:", x$aic, "\n")
+  if (!is.null(x$convergence))
+    cat("Convergence:", x$convergence$message, "| projected gradient:",
+        format(x$convergence$max_abs_projected_gradient, digits = 3), "\n")
   invisible(x)
 }
 
@@ -1523,7 +1506,7 @@ summary.radish <- function(object, conf.level = 0.95, ...)
   x <- object
   tol <- sqrt(.Machine$double.eps) #for checking singularity
 
-  no_coef <- x$fit$boundary || is.null(x$mle$theta)
+  no_coef <- .no_structure_boundary(x$fit) || is.null(x$mle$theta)
   if (!no_coef)
   {
     ztable <- matrix(0, length(x$mle$theta), 4)
@@ -1549,6 +1532,8 @@ summary.radish <- function(object, conf.level = 0.95, ...)
   }
 
   out <- list(boundary      = x$fit$boundary,
+              no_structure_boundary = .no_structure_boundary(x$fit),
+              convergence   = x$convergence,
               phi           = x$fit$phi[,1],
               phi_table     = NULL,
               phi_vcov      = NULL,
@@ -1572,7 +1557,36 @@ summary.radish <- function(object, conf.level = 0.95, ...)
   {
     out$phi_table <- phi_summary$table
     out$phi_vcov <- phi_summary$vcov
+    at_lambda <- grepl("^lambda_", rownames(out$phi_table)) & out$phi_table[, 1] == 0
+    out$phi_at_bound <- setNames(at_lambda, rownames(out$phi_table))
+    if (any(at_lambda)) {
+      out$phi_table[at_lambda, 3] <- NA_real_
+      out$phi_table[at_lambda, 4] <- qnorm(conf.level) * out$phi_table[at_lambda, 2]
+      out$phi_note <- "Zero kernel coefficients are at their lower bound; their upper limits are one-sided."
+    }
+    if (isTRUE(x$fit$rho_boundary)) {
+      out$phi["rho"] <- 0
+      out$phi_table["rho", ] <- c(0, NA_real_, NA_real_, NA_real_)
+      out$rho_note <- "Shared-site correlation rho is reported at zero (internal logit below -8); no Wald uncertainty is reported. Degrees of freedom retain rho because it was estimated."
+    }
   }
+
+  info <- x$gaussian_scale_info
+  if (!is.null(info) && !no_coef) {
+    sigma_names <- intersect(paste0("sigma.", info$scale_vars), rownames(out$ztable))
+    out$ztable[sigma_names, c("z value", "Pr(>|z|)")] <- NA_real_
+    layers <- sub("^sigma\\.", "", sigma_names)
+    sigma <- out$ztable[sigma_names, "Estimate"]
+    low <- info$lower[layers]
+    high <- info$upper[layers]
+    out$sigma_table <- data.frame(layer = layers, estimate = unname(sigma),
+      SE = unname(out$ztable[sigma_names, "Std. Error"]),
+      lower_bound = unname(low), upper_bound = unname(high),
+      near_bound = unname(abs(sigma - low) <= .01 * abs(low) |
+                           abs(sigma - high) <= .01 * abs(high)))
+  }
+  out$ibe_ratio <- terradish_ibe_ratio(x)
+  out$spline_monotonicity <- x$spline_monotonicity
 
   class(out) <- c("summary.terradish", "summary.radish")
   out
@@ -1589,7 +1603,15 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
   cat("Loglikelihood:", x$loglik, paste0("(", x$df), "degrees freedom)\nAIC:", x$aic, "\n\n")
   cat("Number of function calls:", x$fcalls, "\n")
   cat("Number of optimization steps:", x$iters, "\n")
+  if (!is.null(x$convergence))
+    cat("Convergence:", x$convergence$message, "| projected gradient:",
+        format(x$convergence$max_abs_projected_gradient, digits = 3), "\n")
   cat("Norm of gradient at MLE:", x$gradnorm, "\n\n")
+  if (!is.null(x$sigma_table)) {
+    cat("Gaussian scales (map units; no Wald test against zero):\n")
+    print(x$sigma_table, row.names = FALSE)
+    cat("near_bound marks estimates within 1% of a bound.\n\n")
+  }
   if (length(x$phi))
   {
     cat("Nuisance parameters")
@@ -1602,7 +1624,18 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
       print.default(format(x$phi, digits = digits), print.gap = 2L, quote = FALSE)
     cat("\n")
   }
-  if (!x$boundary && !is.null(x$ztable))
+  if (!is.null(x$phi_note)) cat(x$phi_note, "\n")
+  if (!is.null(x$rho_note)) cat(x$rho_note, "\n")
+  if (nrow(x$ibe_ratio)) {
+    cat("Resistance-distance equivalent of one unit of environmental difference:\n")
+    print(x$ibe_ratio, row.names = FALSE)
+    if (!is.null(attr(x$ibe_ratio, "note"))) cat(attr(x$ibe_ratio, "note"), "\n")
+  }
+  if (!is.null(x$spline_monotonicity)) {
+    cat("Spline shape over focal-site covariate ranges:\n")
+    print(x$spline_monotonicity, row.names = FALSE)
+  }
+  if (!x$no_structure_boundary && !is.null(x$ztable))
   {
     cat("Coefficients:\n")
     printCoefmat(x$ztable, digits = digits, signif.stars = signif.stars, na.print = "NA", ...)
@@ -1613,7 +1646,7 @@ print.summary.radish <- function(x, digits = max(3L, getOption("digits") - 3L), 
       print(as.dist(x$vcor))
     }
   }
-  else if (x$boundary)
+  else if (x$no_structure_boundary)
   {
     cat("Model fit is on boundary (e.g. no genetic structure), no meaningful coefficients\n")
   }
@@ -1691,14 +1724,21 @@ anova.radish <- function(object, ..., alternative = NULL)
 {
   dots <- list(...)
   if (is.null(alternative))
-    alternative <- dots[[1]]
+    alternative <- if (length(dots)) dots[[1]] else
+      stop("Supply a second fitted model.", call. = FALSE)
   stopifnot(inherits(object, c("terradish", "radish")) &&
             inherits(alternative, c("terradish", "radish")))
-  stopifnot(!object$fit$boundary && !alternative$fit$boundary)
+  if (.no_structure_boundary(object$fit) || .no_structure_boundary(alternative$fit))
+    stop("A no-structure boundary leaves conductance parameters unidentified; this likelihood-ratio test is unavailable.", call. = FALSE)
 
   contracts <- .terradish_assert_comparable_fits(
     list(object, alternative), purpose = "likelihood-ratio test"
   )
+  if (is.null(contracts[[1]]$response) || is.null(contracts[[2]]$response))
+    stop("Both fits must retain their response matrix for a nesting check.", call. = FALSE)
+  if (is.null(contracts[[1]]$graph) || is.null(contracts[[2]]$graph) ||
+      !identical(contracts[[1]]$graph, contracts[[2]]$graph))
+    stop("Likelihood-ratio tests require the same graph and focal sites.", call. = FALSE)
   model_names <- vapply(contracts,
                         function(x) if (is.null(x$measurement_model)) NA_character_ else x$measurement_model,
                         character(1))
@@ -1706,6 +1746,8 @@ anova.radish <- function(object, ..., alternative = NULL)
     stop("Likelihood-ratio tests require the same measurement model; use information criteria or cross-validation for non-nested alternatives.",
          call. = FALSE)
 
+  if (!is.function(object$submodels$f_factory) || !is.function(alternative$submodels$f_factory))
+    stop("Likelihood-ratio nesting checks require the full fits with retained model factories.", call. = FALSE)
   if (!identical(object$submodels$f_factory,
                  alternative$submodels$f_factory))
     stop("Likelihood-ratio tests require the same conductance-model factory; ",
@@ -1728,6 +1770,13 @@ anova.radish <- function(object, ..., alternative = NULL)
   if (!all(reduced_terms %in% full_terms))
     stop("The reduced model's formula terms are not nested within the full model.",
          call. = FALSE)
+  small <- reduced$comparison$measurement_columns
+  large <- full$comparison$measurement_columns
+  if (!all(colnames(small) %in% colnames(large)))
+    stop("Measurement-model covariate sets are not nested.", call. = FALSE)
+  for (name in colnames(small))
+    if (!isTRUE(all.equal(unname(small[, name]), unname(large[, name]), tolerance = 0)))
+      stop("Measurement-model covariate values differ for `", name, "`.", call. = FALSE)
 
   form_reduced <- paste("Null:", paste(reduced$formula, collapse = " "))
   form_full    <- paste("Alt:", paste(full$formula, collapse = " "))
@@ -1738,6 +1787,19 @@ anova.radish <- function(object, ..., alternative = NULL)
     stop("The full model must add at least one estimated parameter for a likelihood-ratio test.",
          call. = FALSE)
   P     <- pchisq(Chisq, Df, lower.tail = FALSE)
+  reference <- paste0("chi-square (", Df, " df)")
+  added_lambda <- setdiff(grep("^lambda_", rownames(full$fit$phi), value = TRUE),
+                           grep("^lambda_", rownames(reduced$fit$phi), value = TRUE))
+  if (length(added_lambda)) {
+    warning("The null kernel coefficients lie on their zero bounds.", call. = FALSE)
+    if (length(added_lambda) != Df)
+      stop("Test added kernel coefficients separately from other added parameters.", call. = FALSE)
+    P <- .chibar_probability(max(Chisq, 0), length(added_lambda))
+    reference <- paste0("chi-bar-square, binomial weights (", length(added_lambda),
+      " kernels; exact for information-orthogonal kernels, approximate otherwise)")
+  }
+  if (Chisq < -1e-6)
+    stop("The nested full model has lower likelihood; resolve optimization before testing.", call. = FALSE)
   Ll    <- c(reduced$loglik, full$loglik)
   Np    <- c(reduced$df, full$df)
 
@@ -1748,7 +1810,7 @@ anova.radish <- function(object, ..., alternative = NULL)
                "Pr(>Chi)" = c(NA, P))
   rownames(out) <- c("Null", "Alt")
 
-  attr(out, "heading") <- c("Likelihood ratio test",
+  attr(out, "heading") <- c(paste("Likelihood ratio test:", reference),
                            form_reduced, form_full)
   class(out) <- "anova"
   out
@@ -1773,6 +1835,7 @@ logLik.radish <- function(object, ...)
 {
   val <- object$loglik
   attr(val, "df") <- object$df
+  attr(val, "nobs") <- nobs.terradish(object)
   class(val) <- "logLik"
   val
 }
@@ -1791,7 +1854,13 @@ AIC.radish <- function(object, ..., k = 2)
 residuals.radish <- function(object, ...)
 {
   fit <- fitted(object)
-  object$fit$response - fit
+  residual <- object$fit$response - fit
+  if (identical(.terradish_fit_comparison_contract(object)$likelihood_family,
+                "wishart_covariance")) {
+    H <- diag(nrow(residual)) - matrix(1 / nrow(residual), nrow(residual), nrow(residual))
+    residual <- H %*% residual %*% H
+  }
+  residual
 }
 
 #' @rdname terradish_methods

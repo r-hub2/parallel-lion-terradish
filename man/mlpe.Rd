@@ -23,7 +23,7 @@ Passed automatically by the optimizer; users normally do not call this
 function directly.}
 
 \item{S}{Square, symmetric matrix of observed pairwise genetic distances
-(e.g. F\eqn{_{ST}}). Must have the same dimensions as \code{E}.}
+(e.g. \eqn{F_{ST}}). Must have the same dimensions as \code{E}.}
 
 \item{phi}{Named numeric vector of nuisance parameters \code{(alpha, beta,
 tau, rho)}. The stored \code{tau} is log precision and the stored
@@ -73,6 +73,18 @@ effective Wishart degrees-of-freedom value is unavailable or the response is
 not admissible for \code{\link{generalized_wishart}}.
 }
 \details{
+The likelihood uses maximum likelihood (ML), not restricted maximum
+likelihood (REML). AIC can therefore compare different conductance formulas
+fitted to the same response, sites, graph, and likelihood family. That
+comparison does not validate the correlation model: in package validation,
+model-based standard errors understated replicate variation about 1.7-fold.
+Use spatial CV to assess out-of-sample support for conductance terms.
+
+Summaries report shared-site correlation on its natural scale. Near zero,
+the stored logit parameter is poorly identified; its standard error is
+reported as unavailable and a boundary note is shown. This boundary differs
+from a zero resistance coefficient, which leaves conductance unidentified.
+
 The nuisance parameters are:
 \describe{
   \item{\code{alpha}}{Intercept of the mean structure.}
@@ -96,6 +108,11 @@ Use \code{\link{mlpe_covariates}} to extend the mean structure with
 additional fixed pairwise covariates (isolation by environment).
 Coefficients describe conditional associations under the specified mean and
 correlation structure; they do not isolate causal environmental effects.
+
+When the fitted internal correlation logit is below -8,
+  \code{summary()} reports the shared-site correlation at zero and omits its
+  Wald uncertainty. The parameter remains in the degrees of freedom because
+  it was estimated; fixing it in advance would define a different model.
 }
 \examples{
 library(terra)

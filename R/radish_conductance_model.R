@@ -1,4 +1,4 @@
-assemble_model_matrix <- function(formula, spdat)
+assemble_model_matrix <- function(formula, spdat, check_rank = TRUE)
 {
   stopifnot(inherits(formula, "formula"))
   stopifnot(is.data.frame(spdat))
@@ -11,10 +11,10 @@ assemble_model_matrix <- function(formula, spdat)
     # interactions x:z do not appear as required column names; only the
     # underlying raw variables need to be present in the data frame.
     stopifnot(all.vars(formula) %in% colnames(spdat))
-    formula <- reformulate(colnames(formula_covariates))
+    formula <- reformulate(colnames(formula_covariates), env = environment(formula))
 
     # if any layers are not in formula, remove them
-    missing_covariates <- !(colnames(spdat) %in% rownames(formula_covariates))
+    missing_covariates <- !(colnames(spdat) %in% all.vars(formula))
     if (any(missing_covariates))
     {
       unused_covariates <- colnames(spdat)[missing_covariates]
@@ -28,11 +28,16 @@ assemble_model_matrix <- function(formula, spdat)
 
   # get model matrix and check for rank deficiency
   # NOTE: sparse via Matrix::sparse.model.matrix?
-  spdat <- model.matrix(formula, data = spdat)
-  stopifnot(qr(spdat)$rank == ncol(spdat))
+  frame <- stats::model.frame(formula, data = spdat, na.action = stats::na.fail)
+  spdat <- model.matrix(formula, data = frame)
+  prediction_spec <- list(terms = terms(frame),
+    xlevels = lapply(frame[vapply(frame, is.factor, logical(1))], levels),
+    contrasts = attr(spdat, "contrasts"))
+  if (check_rank) stopifnot(qr(spdat)$rank == ncol(spdat))
   if (ncol(spdat) > 1) #unless IBD, remove intercept
     spdat <- spdat[,colnames(spdat) != "(Intercept)", drop=FALSE]
 
+  attr(spdat, "prediction_spec") <- prediction_spec
   spdat
 }
 
@@ -124,6 +129,12 @@ assemble_model_matrix <- function(formula, spdat)
     )
   }
   out <- as.matrix(out)
+  # Preserve the fitted basis and its graph-wide origin when rebuilding on
+  # focal support, plotting grids, or a coarser raster.
+  knots <- attr(out, "knots", exact = TRUE)
+  boundary_knots <- attr(out, "Boundary.knots", exact = TRUE)
+  centers <- if (is.null(spec$centers)) colMeans(out) else spec$centers
+  out <- sweep(out, 2L, centers, "-")
   if (!is.null(spec$columns) && length(spec$columns) == ncol(out))
     colnames(out) <- spec$columns
   else
@@ -135,16 +146,19 @@ assemble_model_matrix <- function(formula, spdat)
     basis = basis,
     degree = degree,
     intercept = intercept,
-    knots = attr(out, "knots", exact = TRUE),
-    Boundary.knots = attr(out, "Boundary.knots", exact = TRUE),
+    knots = knots,
+    Boundary.knots = boundary_knots,
+    centers = centers,
     columns = colnames(out)
   )
   out
 }
 
 .smooth_loglinear_model_matrix <- function(formula, x, df, basis, degree,
-                                           intercept, smooth_specs = NULL)
+                                           intercept, smooth_specs = NULL,
+                                           param_spec = NULL)
 {
+  fitting_basis <- is.null(smooth_specs)
   stopifnot(inherits(formula, "formula"))
   stopifnot(is.data.frame(x))
 
@@ -159,9 +173,19 @@ assemble_model_matrix <- function(formula, spdat)
 
   if (length(param_labels))
   {
-    param_formula <- reformulate(param_labels)
+    param_formula <- reformulate(param_labels, env = environment(formula))
     param_vars <- all.vars(param_formula)
-    param_x <- assemble_model_matrix(param_formula, x[, param_vars, drop = FALSE])
+    if (is.null(param_spec)) {
+      param_x <- assemble_model_matrix(param_formula, x[, param_vars, drop = FALSE],
+                                       check_rank = fitting_basis)
+      param_spec <- attr(param_x, "prediction_spec", exact = TRUE)
+      param_spec$columns <- colnames(param_x)
+    } else {
+      frame <- stats::model.frame(param_spec$terms, x, xlev = param_spec$xlevels,
+                                   na.action = stats::na.fail)
+      param_x <- model.matrix(param_spec$terms, frame, contrasts.arg = param_spec$contrasts)
+      param_x <- param_x[, param_spec$columns, drop = FALSE]
+    }
   }
   else if (!length(smooth_labels))
     param_x <- assemble_model_matrix(~1, x)
@@ -189,10 +213,11 @@ assemble_model_matrix <- function(formula, spdat)
   out <- cbind(param_x, smooth_x)
   if (!ncol(out))
     stop("No conductance covariates were produced from formula.", call. = FALSE)
-  if (qr(out)$rank < ncol(out))
+  if (fitting_basis && qr(out)$rank < ncol(out))
     stop("Smooth conductance model matrix is rank deficient.", call. = FALSE)
   rownames(out) <- NULL
   attr(out, "smooth_specs") <- smooth_specs
+  attr(out, "param_spec") <- param_spec
   out
 }
 
@@ -258,7 +283,8 @@ assemble_model_matrix <- function(formula, spdat)
     basis = basis,
     degree = degree,
     intercept = intercept,
-    smooth_specs = smooth_specs
+    smooth_specs = smooth_specs,
+    param_spec = attr(x, "param_spec", exact = TRUE)
   )
   conductance_model
 }
@@ -269,7 +295,7 @@ assemble_model_matrix <- function(formula, spdat)
 #' that represent mappings from spatial data (e.g. rasters) to conductance.
 #'
 #' @name terradish_conductance_model_factory
-#' @seealso \code{\link{linear_conductance}}, \code{\link{loglinear_conductance}},
+#' @seealso \code{\link{loglinear_conductance}},
 #'   \code{\link{smooth_loglinear_conductance}}
 terradish_conductance_model_factory <- NULL
 
@@ -305,8 +331,9 @@ NULL
 #' \eqn{\theta_j} is the corresponding conductance parameter.
 #'
 #' The intercept is intentionally omitted: multiplying all conductances by a
-#' constant does not change the effective resistance distances, so an intercept
-#' is non-identifiable.
+#' common factor rescales resistance inversely, and the measurement model's
+#' resistance coefficient absorbs that factor. The absolute conductance level
+#' is therefore not identifiable.
 #'
 #' \strong{Interpreting \eqn{\theta}:}
 #' \itemize{
@@ -324,8 +351,7 @@ NULL
 #' habitat suitability, or a causal landscape effect.
 #'
 #' The exponential link guarantees strictly positive conductances for any real
-#' \eqn{\theta}, making \code{loglinear_conductance} more numerically stable
-#' than \code{\link{linear_conductance}} when parameters stray far from zero.
+#' \eqn{\theta}.
 #'
 #' Categorical covariates must be stored as \code{factor} columns in \code{x}
 #' (see \code{\link{conductance_surface}} for how to encode them). They are
@@ -340,8 +366,7 @@ NULL
 #'   conductance values), \code{confint} (a function for confidence intervals),
 #'   and derivative functions used internally by the optimizer.
 #'
-#' @seealso \code{\link{linear_conductance}},
-#'   \code{\link{gaussian_smoothed_loglinear_conductance}},
+#' @seealso \code{\link{gaussian_smoothed_loglinear_conductance}},
 #'   \code{\link{conductance_surface}}, \code{\link{terradish}}
 #'
 #' @examples
@@ -361,7 +386,11 @@ NULL
 
 loglinear_conductance <- function(formula, x)
 {
-  x <- assemble_model_matrix(formula, x)
+  .loglinear_conductance_from_matrix(assemble_model_matrix(formula, x))
+}
+
+.loglinear_conductance_from_matrix <- function(x)
+{
 
   # default starting values
   default <- rep(0, ncol(x))
@@ -418,6 +447,7 @@ loglinear_conductance <- function(formula, x)
   class(conductance_model) <- c("terradish_conductance_model",
                                 "radish_conductance_model")
   attr(conductance_model, "default") <- default
+  attr(conductance_model, "prediction_spec") <- attr(x, "prediction_spec", exact = TRUE)
   conductance_model
 }
 class(loglinear_conductance) <- c("terradish_conductance_model_factory",
@@ -427,9 +457,9 @@ class(loglinear_conductance) <- c("terradish_conductance_model_factory",
 #'
 #' Returns a function of class \code{"terradish_conductance_model"} that
 #' represents a log-linear conductance surface after expanding selected
-#' numeric covariates into spline basis columns. This provides a GAM-like
-#' conductance model while retaining terradish's existing likelihood and MLPE
-#' measurement machinery.
+#' numeric covariates into spline basis columns. The result is an unpenalized
+#' regression spline with a fixed number of coefficients, fitted through the
+#' selected terradish measurement likelihood.
 #'
 #' @param formula Model formula describing which spatial covariates drive
 #'   conductance. Smooth terms are written as \code{s(variable, df = 4)} or
@@ -453,16 +483,32 @@ class(loglinear_conductance) <- c("terradish_conductance_model_factory",
 #'
 #' \deqn{C_i = \exp(B_i \theta)}
 #'
+#' Each spline column is centered over the active graph cells. The fitted
+#' knots, boundary knots, degree, and column centers are retained and reused
+#' for plotting, focal-support prediction, and coarse warm starts. Centering
+#' changes the arbitrary conductance reference level but preserves the
+#' likelihood and fitted conductance coefficients. Uncertainty bands are
+#' relative to the landscape-mean spline contribution to log conductance.
+#'
 #' where \eqn{B_i} is the row of the expanded spline/parametric design matrix
-#' for grid cell \eqn{i}. This is GAM-like in the conductance surface, not a
-#' replacement for the MLPE response model. The \code{\link{mlpe}} measurement
-#' model can be used with this conductance factory in the same way it is used
-#' with \code{\link{loglinear_conductance}}.
+#' for grid cell \eqn{i}. The same conductance factory works with MLPE and
+#' Wishart measurement models.
 #'
 #' Smoothing parameters are not estimated in this first implementation. The
 #' effective smoothness is controlled by fixed basis dimension through
 #' \code{df} or \code{k}; use small values for stable first-pass model
 #' comparison.
+#' AIC and AICc at nominal Wishart information can over-select flexible
+#' curves. Prefer spatial CV for selecting conductance terms, and examine
+#' sensitivity to \code{nu} before interpreting uncertainty. Tails beyond
+#' the sampled covariate range are poorly identified. A selected curve can
+#' describe how a process maps onto the graph without identifying an
+#' ecological response mechanism.
+#'
+#' \code{summary(fit)$spline_monotonicity} describes each fitted smooth over
+#' the range at focal sites. It reports whether the curve is monotone, its
+#' direction, and the number of derivative sign changes. This is a shape
+#' diagnostic, not an uncertainty test.
 #'
 #' @return A function of class \code{"terradish_conductance_model"} that
 #'   accepts a numeric vector of conductance parameters \code{theta} and
@@ -505,7 +551,7 @@ attr(smooth_loglinear_conductance, "link") <- "log"
 
 .smooth_loglinear_factory <- function(df = 4L, basis = c("ns", "bs"),
                                       degree = 3L, intercept = FALSE,
-                                      smooth_specs = NULL)
+                                      smooth_specs = NULL, param_spec = NULL)
 {
   basis <- match.arg(basis)
   df <- as.integer(df)
@@ -516,7 +562,7 @@ attr(smooth_loglinear_conductance, "link") <- "log"
   {
     x <- .smooth_loglinear_model_matrix(
       formula, x, df = df, basis = basis, degree = degree,
-      intercept = intercept, smooth_specs = smooth_specs
+      intercept = intercept, smooth_specs = smooth_specs, param_spec = param_spec
     )
     .smooth_loglinear_conductance_from_matrix(
       x = x, df = df, basis = basis, degree = degree,
@@ -537,117 +583,3 @@ attr(smooth_loglinear_conductance, "link") <- "log"
   )
   factory
 }
-
-#' Identity-link conductance model
-#'
-#' Returns a function of class \code{"terradish_conductance_model"} that
-#' represents a linear mapping from spatial covariates to conductance.
-#'
-#' @param formula Model formula describing which spatial covariates drive
-#'   conductance. The left-hand side is ignored; only the right-hand side terms
-#'   are used.
-#' @param x Data frame of spatial covariates extracted from a
-#'   \code{\link{conductance_surface}} object (typically \code{surface$x}).
-#'
-#' @details
-#' The conductance at grid cell \code{i} is:
-#'
-#' \deqn{C_i = \theta_1 x_{i1} + \theta_2 x_{i2} + \ldots}
-#'
-#' The intercept is omitted because it is non-identifiable (multiplying all
-#' conductances by a constant leaves resistance distances unchanged).
-#'
-#' \strong{When to prefer \code{linear_conductance} over
-#' \code{loglinear_conductance}:}
-#' \itemize{
-#'   \item When the chosen covariate transformations support a direct additive
-#'     parameterization of fitted conductance.
-#'   \item When theory predicts a linear relationship.
-#' }
-#'
-#' \strong{Caution:} conductance must be strictly positive. The optimizer does
-#' not automatically enforce this; choose starting values and parameter bounds
-#' so that \eqn{C_i > 0} throughout the optimization. Fitting is safer when
-#' covariates are non-negative and parameters are constrained to be positive.
-#' For unrestricted parameters, \code{\link{loglinear_conductance}} is more
-#' numerically robust.
-#'
-#' Default starting values are all 1 (rather than 0 as in
-#' \code{loglinear_conductance}) to ensure positive conductances at the start.
-#'
-#' Categorical covariates and in-formula transformations are supported via
-#' \code{\link[stats]{model.matrix}}, the same as in
-#' \code{\link{loglinear_conductance}}.
-#'
-#' @return A function of class \code{"terradish_conductance_model"} that
-#'   accepts a numeric vector of conductance parameters \code{theta} and
-#'   returns a list with elements \code{conductance}, \code{confint}, and
-#'   internal derivative functions.
-#'
-#' @seealso \code{\link{loglinear_conductance}}, \code{\link{terradish}}
-#'
-#' @examples
-#' x <- data.frame(altitude = c(1, 2, 3), forestcover = c(2, 5, 4))
-#' model <- linear_conductance(~ altitude + forestcover, x)
-#' fit <- model(c(altitude = 0.5, forestcover = 1))
-#' fit$conductance
-#'
-#' @export
-
-linear_conductance <- function(formula, x)
-{
-  x <- assemble_model_matrix(formula, x)
-
-  # default starting values
-  default <- rep(1, ncol(x))
-  names(default) <- colnames(x)
-
-  conductance_model <- function(theta)
-  {
-    stopifnot(length(theta) == ncol(x))
-
-    conductance        <- as.vector(x %*% theta)
-    conductance        <- .validate_conductance_values(
-      conductance,
-      context = "linear_conductance()"
-    )
-
-    ones <- matrix(1, nrow(x), 1)
-    df__dtheta_matrix <- x
-
-    # asymptotic confidence intervals
-    confint <- function(theta, vcov, quantile = 0.95, scale = c("conductance", "linpred"))
-    {
-      scale <- match.arg(scale)
-      cond_sd <- sqrt(rowSums((x %*% vcov) * x))
-      ci <- conductance + qnorm((1 - quantile)/2) * cond_sd %*% t(c(1, -1))
-      colnames(ci) <- c("lower", "upper")
-      attr(ci, "quantile") <- quantile 
-      if (scale == "linpred") 
-        return (ci)
-      else if (scale == "conductance")
-        return (ci)
-    }
-
-    # first- and second-order derivatives
-    df__dx             <- function(k)    ones * theta[k]
-    df__dtheta         <- function(k)    df__dtheta_matrix[, k]
-    d2f__dtheta_dtheta <- function(k, l) 0. * ones
-    d2f__dtheta_dx     <- function(k, l) (k==l) * ones
-
-    list(conductance        = conductance,
-         confint            = confint,
-         df__dx             = df__dx,
-         df__dtheta         = df__dtheta,
-         df__dtheta_matrix  = df__dtheta_matrix,
-         d2f__dtheta_dtheta = d2f__dtheta_dtheta, 
-         d2f__dtheta_dx     = d2f__dtheta_dx)
-  }
-
-  class(conductance_model) <- c("terradish_conductance_model",
-                                "radish_conductance_model")
-  attr(conductance_model, "default") <- default
-  conductance_model
-}
-class(linear_conductance) <- c("terradish_conductance_model_factory",
-                               "radish_conductance_model_factory")

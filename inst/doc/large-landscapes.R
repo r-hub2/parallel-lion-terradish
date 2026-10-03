@@ -32,6 +32,26 @@ surface    <- conductance_surface(covariates, melip.coords, directions = 8)
 #                  conductance_model = loglinear_conductance,
 #                  solver = "amg")
 
+## ----measurement-control, eval = FALSE----------------------------------------
+# fit_smooth_gw <- terradish(
+#   admissible_squared_distance ~ s(forestcover, df = 4) +
+#     s(altitude, df = 4),
+#   surface,
+#   conductance_model = smooth_loglinear_conductance,
+#   measurement_model = generalized_wishart,
+#   nu = effective_marker_df,
+#   optimizer = "bfgs",
+#   control = NewtonRaphsonControl(maxit = 80, verbose = TRUE),
+#   measurement_control = NewtonRaphsonControl(
+#     maxit = 40,
+#     ctol = 1e-8,
+#     ftol = 1e-10,
+#     verbose = FALSE
+#   )
+# )
+# 
+# fit_smooth_gw$fit$subproblem
+
 ## ----curvature-calls, eval = FALSE--------------------------------------------
 # # Generalized Wishart requires an admissible squared-distance response that is
 # # coherently related to a centered positive-semidefinite covariance matrix.
@@ -54,26 +74,42 @@ surface    <- conductance_surface(covariates, melip.coords, directions = 8)
 # bench <- run_curvature_large_landscape_benchmark(CONFIG)
 # bench$comparison
 
-## ----reduce-------------------------------------------------------------------
-# a conductance vector to reduce (evaluate the model at some theta)
-model <- loglinear_conductance(~ forestcover + altitude, surface$x)
-cond  <- model(c(0.3, -0.2))$conductance
+## ----crop-sensitivity, eval = FALSE-------------------------------------------
+# # Scale on the original domain once, before cropping.
+# buffers <- c(2, 5, 10) * max(terra::res(covariates))
+# fits_buffer <- lapply(buffers, function(buffer) {
+#   cropped_surface <- conductance_surface(
+#     covariates, melip.coords, directions = 8, crop_buffer = buffer
+#   )
+#   terradish(melip.Fst ~ forestcover + altitude, cropped_surface,
+#             measurement_model = mlpe)
+# })
+# lapply(fits_buffer, coef)
+# lapply(fits_buffer, confint)
 
-red <- terradish_kron_reduce_tiled(surface, cond)
-red$method                 # which strategy "auto" chose
-red$peak$interior          # largest single factorization (vertices)
-red$n_interior             # interior vertices in total
+## ----coarse-warm-start, eval = FALSE------------------------------------------
+# fit <- terradish(
+#   melip.Fst ~ forestcover + altitude, surface,
+#   measurement_model = mlpe,
+#   approximation = "coarse_raster",
+#   approximation_control = list(factor = c(4, 2), exact_refine = TRUE)
+# )
+# summary(fit)
 
-# forcing nested dissection bounds the largest factorization far below the
-# whole interior (this is the path that keeps memory in check at scale)
-nested <- terradish_kron_reduce_tiled(surface, cond, method = "nested")
-nested$peak$interior
-
-# both are identical to the single-shot reduction
-single <- terradish_kron_reduce(surface, cond)
-P <- match(single$boundary, red$boundary)
-max(abs(as.matrix(red$laplacian[P, P]) -
-        as.matrix(single$laplacian))) / max(abs(as.matrix(single$laplacian)))
+## ----slim-fit, eval = FALSE---------------------------------------------------
+# fit_slim <- slim_terradish(fit)
+# fit_slim$storage
+# 
+# saveRDS(fit_slim, "terradish-fit-slim.rds")
+# 
+# # Equivalent shorthand at fit time
+# fit_slim <- terradish(
+#   admissible_squared_distance ~ cov1 + cov2,
+#   surface,
+#   measurement_model = generalized_wishart,
+#   nu = effective_marker_df,
+#   slim = TRUE
+# )
 
 ## ----quick-ref, eval = FALSE--------------------------------------------------
 # # 1. Build the surface as usual
@@ -90,10 +126,8 @@ max(abs(as.matrix(red$laplacian[P, P]) -
 # 
 # summary(fit)                                   # conditional estimates and SEs
 # 
-# # 3. (Advanced) exact memory-bounded reduction onto the focal sites
-# cond_map <- conductance(surface, fit)[["est"]]
-# cond <- terra::values(cond_map, mat = FALSE)
-# cond <- cond[is.finite(cond)]                   # active-cell conductance vector
-# red  <- terradish_kron_reduce_tiled(surface, cond)  # auto: fast unless it would not fit
-# red$method                                     # "direct" or "nested"
+# # Optional archival copy when prediction from the saved object is unnecessary
+# fit_archive <- slim_terradish(fit)
+# saveRDS(fit_archive, "fit-archive.rds")
+# 
 

@@ -34,7 +34,9 @@ Gaussian scale parameters on their natural distance scale. Scalar values
 are recycled across all scaled rasters; named vectors may be used to set
 different bounds by raster name. When omitted, \code{sigma_lower} defaults
 to half of the mean raster cell width and \code{sigma_upper} defaults to
-the diagonal length of the retained raster extent.}
+one sixth of the smaller raster dimension in cells times the mean cell
+width. The Gaussian kernel uses a raster-sized window; larger explicit
+upper bounds issue a warning because more of the kernel is truncated.}
 
 \item{sigma_conversion}{Internal scaling applied during optimization.
 \code{"cell"} (default) rescales each sigma parameter by the mean cell
@@ -59,6 +61,8 @@ parameters as part of the optimized conductance parameter vector.
 }
 \details{
 This is a scale-aware extension of \code{\link{loglinear_conductance}}.
+Factory settings are evaluated when the factory is created, so factories
+constructed in a loop retain their own raster choices and scale bounds.
 Given a model formula such as
 \code{~ altitude * forestcover + I(altitude^2)}, the fitted parameter vector
 contains both conductance coefficients and one natural-scale \code{sigma}
@@ -77,13 +81,30 @@ These parameters describe Gaussian smoothing of the supplied raster in its
 map units. They are not direct estimates of dispersal distance, movement
 distance, home-range size, or the scale of a causal ecological process.
 
-Unlike the standard fixed-raster workflow, users generally should not call
-\code{\link{scale_covariates}} before fitting this model. The original raster
-values are needed so the Gaussian convolution can be applied at each proposed
-\code{sigma}. If \code{standardize = TRUE}, the smoothed raster values are
-centered and scaled after smoothing, which keeps conductance coefficients on
-a stable scale while still allowing \code{sigma} to be interpreted in map
-units.
+Unlike the standard fixed-raster workflow, pre-scaling with
+\code{\link{scale_covariates}} is unnecessary when
+\code{standardize = TRUE}: the supplied raster is smoothed at each proposed
+\code{sigma}, then its active-cell values are centered and scaled. Because
+\code{scale_covariates} applies a positive affine transformation to each
+layer, pre-scaling gives the same standardized smoothed values up to
+numerical tolerance. Supplying original values keeps the preprocessing and
+coefficient interpretation clear. With \code{standardize = FALSE},
+pre-scaling changes the covariate and coefficient units.
+With the default standardization, a coefficient is relative log conductance
+per standard deviation of the smoothed layer at the current sigma. The
+layer is re-standardized at every candidate sigma during fitting. The
+half-cell lower bound still smooths; near the upper bound, the smoothed
+layer acts as a broad spatial trend. Dispersal averaging can favor a positive
+sigma even when no separate ecological scale of effect exists.
+
+The Gaussian kernel is truncated to a raster-sized window. The default
+upper bound keeps approximately three sigma inside half the smaller raster
+dimension; increasing it cannot recover kernel mass outside that window.
+Inspect \code{summary(fit)$sigma_table} for bound flags and
+\code{\link{gaussian_scale_profile}} for profile intervals. Scale estimates
+do not receive z or p values because zero is outside the fitting interval.
+Wald intervals are truncated at the bounds; a bound-limited interval does
+not demonstrate a precisely identified scale.
 
 The current implementation supports numeric raster formulas built from raw
 raster names, interactions, and polynomial/arithmetic terms that can be

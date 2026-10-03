@@ -20,10 +20,12 @@ terradish(
   validate = FALSE,
   cores = 1L,
   curvature = c("exact", "gauss_newton"),
-  solver = c("direct", "auto", "amg", "pcg", "pcg_jacobi", "block_cg"),
+  solver = c("direct", "auto", "amg"),
   solver_control = NULL,
   approximation = c("none", "landmark", "coarse_raster"),
-  approximation_control = NULL
+  approximation_control = NULL,
+  measurement_control = NULL,
+  slim = FALSE
 )
 }
 \arguments{
@@ -45,10 +47,9 @@ the right-hand side.}
 \item{nu}{Effective Wishart degrees of freedom passed to measurement models
 that require it, such as \code{\link{generalized_wishart}} and
 \code{\link{wishart_covariance}}. It must be supplied and is not estimated.
-For biallelic SNPs, use the number of approximately independent retained
-SNPs. For microsatellites, use the number of loci as the conservative
-primary value and examine larger plausible values in a sensitivity
-analysis. Ignored by non-Wishart measurement models.}
+It controls effective information, not a marker count. Report sensitivity
+across plausible values with \code{\link{terradish_rescale_nu}}.
+Ignored by non-Wishart measurement models.}
 
 \item{theta}{Starting values for optimization}
 
@@ -85,7 +86,13 @@ it on with
 
 \item{validate}{Numerical validation of leverage via package \code{numDeriv} (very slow, use for debugging small examples)}
 
-\item{cores}{Number of worker processes to use for Hessian and leverage calculations. \code{1} evaluates serially.}
+\item{cores}{Number of worker processes. \code{1} evaluates serially.
+Parallel execution is experimental and uses PSOCK workers on every
+operating system. Only Hessian and partial solves run in parallel; AMG
+and cached CHOLMOD ignore this setting. Multiple workers can be slower
+on small graphs. A one-time message explains these limits when applicable.
+On Windows, one PSOCK cluster is retained for the duration of the fit
+instead of being rebuilt for every derivative evaluation.}
 
 \item{curvature}{Curvature used for optimization steps and for the returned
 covariance matrix. \code{"exact"} (default) uses the exact Hessian.
@@ -98,7 +105,10 @@ Standard errors from \code{summary()} are then the asymptotic
 information-based errors. With \code{leverage = TRUE} the leverage
 diagnostics inherit the same approximation.}
 
-\item{solver}{Linear-system solver used for the reduced Laplacian. \code{"direct"} uses sparse Cholesky updates; \code{"auto"} conservatively chooses between the direct and AMG backends based on graph size and right-hand-side count; \code{"amg"} uses smoothed-aggregation AMG-preconditioned conjugate gradients; \code{"pcg"} uses incomplete-Cholesky preconditioned conjugate gradients; \code{"pcg_jacobi"} keeps the older Jacobi-preconditioned prototype.}
+\item{solver}{Linear-system solver. \code{"direct"} uses sparse Cholesky,
+\code{"amg"} uses algebraic multigrid, and \code{"auto"} chooses AMG
+above the large-graph threshold regardless of the number of right-hand
+sides. AMG iteration counts can rise with conductance contrast.}
 
 \item{solver_control}{Optional named list of solver settings passed to
 \code{\link{terradish_algorithm}}. For \code{solver = "direct"}, supported
@@ -108,7 +118,8 @@ latter can be \code{"matrix"} or the experimental \code{"cholmod_cpp"} and
 \code{"cholmod_cpp_cached"} backends.
 For \code{solver = "auto"}, supported selection entries include
 \code{auto_direct_max_vertices},
-\code{auto_amg_min_vertices}, and \code{auto_direct_max_rhs}. For
+\code{auto_amg_min_vertices}. The legacy \code{auto_direct_max_rhs}
+setting is accepted but no longer affects selection. For
 \code{solver = "amg"} or \code{"auto"}, \code{terradish()} also
 understands an adaptive schedule with entries such as \code{adaptive},
 \code{tol_early}, \code{tol_mid}, \code{tol_final}, \code{maxit_early},
@@ -131,11 +142,11 @@ infinite values, and retry with \code{solver = "auto"} or
 optimizes first on a space-filling subset of focal populations and then
 refines on the full likelihood when supported by the measurement model.
 \code{"coarse_raster"} optimizes first on an aggregated raster and then
-optionally refines on the full-resolution graph. If multiple coarse
+refines on the full-resolution graph. If multiple coarse
 factors are supplied, they are evaluated from coarsest to finest before the
 final full-resolution stage. This is an opt-in warm-start strategy, not a
-replacement for the exact full-resolution likelihood unless
-\code{exact_refine = FALSE}.}
+replacement for the exact full-resolution likelihood. Exact refinement
+is required.}
 
 \item{approximation_control}{Optional named list controlling the landmark or
 coarse-raster approximation. Landmark entries include
@@ -155,13 +166,26 @@ full-resolution refinement; by default the main \code{control} is reused.
 For
 \code{measurement_model = leastsquares}, landmark exact-refinement is
 guarded and the approximation stage is skipped.}
+
+\item{measurement_control}{Optional \code{\link{NewtonRaphsonControl}} object
+for the inner nuisance-parameter profile. This is separate from
+\code{control}, which governs optimization of the conductance parameters.
+The fitted object records the inner optimizer's convergence code and
+iteration count for the final evaluation.}
+
+\item{slim}{Logical. If \code{TRUE}, apply \code{\link{slim_terradish}} to
+the returned fit, removing model closures and leverage arrays. Use this for
+durable storage only when later conductance prediction and model
+reevaluation are unnecessary.}
 }
 \value{
 An object of class \code{terradish} containing the fitted conductance
   parameters, optimized nuisance parameters, log-likelihood, model
   comparison statistics, timing/evaluation diagnostics, and optional
-  leverage diagnostics. See \code{\link{terradish_methods}} for the
-  available S3 methods.
+  leverage diagnostics. The nested \code{fit$subproblem} element records the
+  convergence code and iteration count from the final nuisance-parameter
+  profile. If \code{slim = TRUE}, a \code{storage} element records what was
+  removed. See \code{\link{terradish_methods}} for the available S3 methods.
 }
 \description{
 Uses maximum likelihood to fit a parameterized conductance surface to genetic data,
@@ -226,7 +250,10 @@ The dummy coding of categorical covariates is done by the function passed to
 reduce runtime. First, build the graph with
 \code{conductance_surface(..., crop_buffer = )} when focal sites occupy only
 part of the raster. This removes vertices outside the buffered sampling
-extent before fitting. Second, use
+extent before fitting. Cropping changes resistance: one sensitivity audit
+found increases of 15--23\% with a two-cell buffer and 1--2\% with a
+ten-cell buffer. These values are case-specific. Refit with a larger buffer
+to assess sensitivity on your landscape. Second, use
 \code{approximation = "coarse_raster"} with
 \code{approximation_control = list(factor = c(4, 2), exact_refine = TRUE)}
 to optimize on one or more aggregated rasters before refining on the original
@@ -234,8 +261,13 @@ graph. With \code{exact_refine = TRUE}, the returned coefficients and
 likelihood are from the full-resolution graph; the coarse fits are only
 starting values. To keep the full-resolution cleanup deliberately short, pass
 \code{refine_control = NewtonRaphsonControl(maxit = 2, ...)} inside
-\code{approximation_control}. With \code{exact_refine = FALSE}, the result is
-faster but approximate and should be interpreted as a screening fit.
+\code{approximation_control}. Exact refinement is required.
+
+For spline terms, \code{summary()} reports monotonicity over the covariate
+range at the focal sites, including the number of derivative sign changes.
+A monotone curve increases or decreases throughout that range; a
+nonmonotone curve changes direction. This describes the fitted curve, not
+a confidence statement about its shape outside or within that range.
 
 \strong{Gaussian scale-aware conductance.}
 \code{\link{gaussian_smoothed_loglinear_conductance}} can also use
@@ -250,10 +282,45 @@ factors, the estimated parameters are the \code{K-1} mean differences
 against a reference category). The intercept is excluded if it is not
 identifiable.
 
-If the fit is on the boundary (e.g. no spatial genetic structure) or is the
-null model of isolation-by-distance, the fitted object will not contain
-influence/leverage/gradient/hessian.
+If the resistance contribution is zero, or the formula specifies uniform
+conductance, conductance coefficients are not identified and their
+influence, gradient, and Hessian are unavailable. A zero environmental
+kernel weight does not by itself remove conductance inference.
+
+\strong{Convergence and starting values.} Inspect \code{fit$convergence}
+before interpreting estimates. Code 0 requires a largest absolute projected
+gradient below \code{ctol}, or an objective change below \code{ftol} together
+with a projected gradient below \code{sqrt(ctol)}. Code 1 means the iteration
+limit was reached; code 2 means a stall or failed line search. The projected
+gradient ignores components pointing outside active parameter bounds.
+The record includes the criterion, iterations, gradient, boundary status,
+and whether a restart was attempted. A small objective change alone is not
+convergence. Also inspect \code{fit$fit$subproblem$convergence} for nuisance
+optimization. Numerical convergence does not establish model adequacy.
+
+If a user-supplied starting point reaches a no-structure boundary, fitting
+retries the default starting point and keeps the better likelihood. Report
+starting-value sensitivity when distinct solutions remain plausible.
 }
+\section{Effective Wishart information}{
+
+For Wishart likelihoods, \code{nu} scales the log likelihood. Point
+estimates do not depend on it, but standard errors, likelihood-ratio tests,
+and information criteria do. It is a dispersion parameter that you set,
+rather than the number of markers. Linkage and the population history
+shared by loci can make effective information much smaller than the SNP
+count. In forward-time simulations used to validate terradish, standard
+errors at the SNP count were three to five times smaller than the spread
+among replicate histories. Those model-based errors understated uncertainty.
+
+Use \code{\link{terradish_cv_folds}} to compare conductance formulas, and
+\code{\link{terradish_rescale_nu}} to report inference across plausible
+values. For the same successful folds and nuisance settings, changing
+\code{nu} rescales Wishart CV scores without changing their ranking.
+Neither procedure identifies the true effective information or repairs
+an unsuitable response matrix.
+}
+
 \examples{
 \donttest{
 

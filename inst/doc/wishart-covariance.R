@@ -56,21 +56,9 @@ S_ms <- cov_from_genetic_data(
 )
 round(S_ms, 3)
 
-## ----microsatellite-nu--------------------------------------------------------
-# Larger sensitivity value: sum(K_l - 1) across loci
-msat_nu_upper <- sum(vapply(split(seq_along(loci_ms), loci_ms), function(j) {
-  alleles_l <- unlist(alleles[, j, drop = FALSE], use.names = FALSE)
-  length(unique(alleles_l[!is.na(alleles_l)])) - 1L
-}, integer(1)))
-
-n_loci <- length(unique(loci_ms))   # conservative primary value
-
-cat("Primary value (number of loci):             nu =", n_loci, "\n")
-cat("Larger sensitivity value (sum(K_l - 1)):   nu =", msat_nu_upper, "\n")
-
 ## ----check-eigenvalues--------------------------------------------------------
 ev <- eigen(S_ms, symmetric = TRUE, only.values = TRUE)$values
-all(ev > 0)  # TRUE → positive definite; FALSE → semi-definite or indefinite
+range(ev)
 
 ## ----landscape-setup----------------------------------------------------------
 library(terra)
@@ -92,7 +80,7 @@ cat("Number of sampling sites:", n_sites, "\n")
 ## ----simulate-covariance------------------------------------------------------
 # Use conductance parameters roughly consistent with the melip fit in the
 # getting-started vignette (forestcover positive, altitude negative).
-# nu = 1000 is an illustrative effective marker count for this simulation.
+# nu = 1000 is an illustrative simulation parameter, not a marker-count rule.
 sim <- simulate_covariance_response(
   theta             = c(forestcover = 1.0, altitude = -0.5),
   formula           = ~ forestcover + altitude,
@@ -104,7 +92,7 @@ sim <- simulate_covariance_response(
   seed              = 123
 )
 
-# This is what would come from cov_from_genetic_data() applied to real genotypes.
+# This draw follows the fitted statistical model; real genotype summaries may not.
 S_cov <- sim$covariance
 dim(S_cov)
 round(S_cov[1:5, 1:5], 4)
@@ -134,23 +122,16 @@ fit_wc <- terradish(
 summary(fit_wc)
 
 ## ----nu-invariance------------------------------------------------------------
+# Reuse the fitted optimum; rescale its likelihood and uncertainty.
 fit_nu <- function(nu) {
-  f <- terradish(
-    S_cov ~ forestcover + altitude,
-    data              = surface,
-    conductance_model = loglinear_conductance,
-    measurement_model = wishart_covariance,
-    nu                = nu
-  )
-  list(theta = coef(f),
-       se    = sqrt(diag(solve(f$fit$hessian))))
+  f <- terradish_rescale_nu(fit_wc, nu = nu)
+  list(theta = coef(f), se = sqrt(diag(vcov(f))))
 }
-
 f100   <- fit_nu(100)
 f1000  <- fit_nu(1000)
 f10000 <- fit_nu(10000)
 
-# Point estimates agree across three orders of magnitude
+# Point estimates agree across this 100-fold range
 rbind(`nu=100`   = f100$theta,
       `nu=1000`  = f1000$theta,
       `nu=10000` = f10000$theta)
@@ -183,7 +164,7 @@ cat("\nFor comparison, exp(phi['sigma']) =",
     round(exp(fit_wc$fit$phi["sigma"]), 3),
     " vs. true sigma =", sim$sigma, "\n")
 
-## ----plot-fit, fig.cap = "***Observed vs. fitted genetic covariance.***"------
+## ----plot-fit, fig.cap = "***Observed and fitted covariance in the site-centered representation.***"----
 plot(fit_wc, type = "fit")
 
 ## ----plot-surface, fig.cap = "***Estimated conductance surface with 95% CI bounds.***"----
@@ -209,60 +190,6 @@ plot(fit_wc, type = "marginal", data = surface)
 #   support_probs = c(0.01, 0.99),
 #   clamp_covariates = c("forestcover", "altitude")
 # )
-
-## ----drift-simulate-----------------------------------------------------------
-# An illustrative site-level covariate for diagonal variance.
-n_site <- length(surface$demes)
-site_variance <- scale(seq_len(n_site))[, 1]
-
-# True conductance-implied covariance E at the conductance truth used above.
-E_true <- as.matrix(terradish_algorithm(
-  loglinear_conductance(~ forestcover + altitude, surface$x),
-  leastsquares, surface, S = diag(n_site),
-  theta = c(forestcover = 1.0, altitude = -0.5),
-  objective = FALSE, gradient = FALSE, hessian = FALSE, partial = FALSE
-)$covariance)
-
-# Per-site nugget: baseline exp(log(0.2)), slope -0.6 on the (centered) covariate.
-Z <- cbind(1, scale(site_variance, scale = FALSE))
-gamma_true <- c(log(0.2), -0.6)
-nugget     <- as.vector(exp(Z %*% gamma_true))
-Sigma_true <- 1.0 * E_true + diag(nugget)
-
-set.seed(123)
-nu_demo <- 500
-S_drift <- rWishart(1, df = nu_demo, Sigma = Sigma_true / nu_demo)[, , 1]
-
-## ----drift-fit----------------------------------------------------------------
-g_drift <- wishart_drift_covariates(site_variance, model = "wishart_covariance")
-
-fit_drift <- terradish(
-  S_drift ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = g_drift,
-  nu                = nu_demo
-)
-
-fit_scalar <- terradish(
-  S_drift ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = wishart_covariance,
-  nu                = nu_demo
-)
-
-summary(fit_drift)
-
-## ----drift-interpret----------------------------------------------------------
-# Recovered log-diagonal slope (true value -0.6)
-fit_drift$fit$phi["gamma_var1", 1]
-
-# Compare only because the response, sites, graph, likelihood, and nu match.
-aic_table(
-  list(fit_drift, fit_scalar),
-  mod_names = c("diagonal covariate", "scalar nugget")
-)
 
 ## ----check-gw-response--------------------------------------------------------
 S_dist <- dist_from_cov(S_cov)

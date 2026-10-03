@@ -1,454 +1,135 @@
-# **terradish** <img src="man/figures/terradish-sticker.png" align="right" height="225"/>
-
-### Fast gradient-based optimization of resistance surfaces for landscape genetics.
+# terradish <img src="man/figures/terradish-sticker.png" align="right" height="200"/>
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21225712.svg)](https://doi.org/10.5281/zenodo.21225712)
 
-`terradish` is an R package for maximum likelihood estimation of isolation-by-resistance (IBR) models. The core optimization infrastructure (sparse Laplacian factorization, reverse-mode gradient backpropagation through the graph Laplacian, and the MLPE and generalized Wishart likelihood layers) was developed by **Nate Pope** as the [`radish`](https://github.com/nspope/radish) R package. `terradish` is a `terra`-native extension of that framework, adding new measurement models, Gaussian raster-smoothing optimization, IBE + IBR joint fitting, cross-validation tools, improved visualization, and a suite of helper utilities, while preserving full backward compatibility with `radish` function names.
+terradish estimates landscape conductance surfaces from genetic data by maximum likelihood on a raster graph. It fits log-linear conductance models and can optionally estimate each covariate's Gaussian smoothing scale and spline shape. Models fit pairwise genetic distances through the MLPE likelihood, or allele-frequency covariance and squared distances derived from it through a Wishart likelihood on site contrasts. Both families accept the same pairwise environmental covariates alongside resistance. Exact sparse Cholesky and algebraic multigrid solvers handle large rasters. Fixed-domain spatial cross-validation compares conductance formulas.
 
-The central idea is **isolation by resistance (IBR)**: instead of assuming that genetic distance simply tracks straight-line geographic distance (isolation by distance, IBD), the model maps landscape covariates to relative conductance on a graph. `terradish` estimates conditional associations between those covariates and genetic distance or covariance using efficient sparse linear algebra and analytic gradients. Conductance is a model-implied graph quantity, not a direct measurement of habitat permeability, movement, migration, or causation.
-
-## Key features
-
--   Four **measurement models**: `leastsquares`, `mlpe`, `generalized_wishart`, `wishart_covariance`
--   Four core **conductance models**: `loglinear_conductance`, `linear_conductance`, `smooth_loglinear_conductance`, and `gaussian_smoothed_loglinear_conductance`
--   Support for **quadratic** (`I(x^2)`) and **interaction** (`x * z`) terms in conductance formulas
--   Five **plot types**: observed vs. fitted (`"fit"`), conductance surface with CI (`"surface"`), marginal associations on the response scale (`"marginal_response"`, default), marginal associations on the conductance scale (`"marginal"`), and Gaussian-kernel summaries (`"sigma"`)
--   **IBE + IBR** joint modeling via `pairwise_endpoint_covariates()` and `mlpe_covariates()`
--   **Model comparison**: `aic_table()`, `anova()`, `terradish_grid()`
--   **Cross-validation**: `terradish_cv()`, `terradish_cv_replicates()`, `cv_model_selection()`
--   **Selected-pair analyses**: `pair_subset_measurement_model()` retains all sites in the graph while fitting only chosen pairwise observations
--   **Large-raster helpers**: focal-site cropping with `crop_buffer`, coarse-raster warm starts, `terradish_solver_benchmark()`, and `terradish_assess_settings()`
--   `terra`-native throughout; `radish*` legacy names work with deprecation warnings during transition
+Estimated coefficients describe relative conductance and are conditional on the measurement-model terms. They do not directly estimate movement, migration, or causal landscape effects. For Wishart likelihoods, the user-supplied information parameter `nu` controls inferential precision. Using the SNP count overstated information by roughly an order of magnitude in the package's forward-time validation experiments.
 
 ## Installation
 
-``` r
-# Released version
-install.packages("terradish")
+The supported core requires landgraph version 0.0.3 or later. Install a compatible companion version before terradish:
 
-# Development version
+```r
+remotes::install_github("wpeterman/landgraph")
 remotes::install_github("wpeterman/terradish")
 ```
 
-`terradish` implements the MLPE measurement model internally, so no additional
-package is required to use it. `adegenet` is optional and needed only by
-`pca_dist()`.
-
-## Conceptual overview
-
-The workflow has five linked steps:
-
-1.  **Map covariates to vertex conductance** with a selected conductance model.
-2.  **Build the weighted graph Laplacian** $L(\theta)$.
-3.  **Derive the shared graph kernel** $E(\theta)=L(\theta)^+$, and resistance distances when required.
-4.  **Choose a measurement likelihood** for the observed genetic distance or covariance matrix.
-5.  **Optimize** the conductance and nuisance parameters by maximum likelihood.
-
-```         
-Raster covariates                   Sampling locations
-(altitude, forestcover)             (GPS coordinates)
-        |                                  |
-        +-----> conductance_surface() <----+
-                        |
-                        v
-             vertex conductance -> L(theta)
-                         |
-                         v
-                      E(theta)
-                         |
-         +---------------+----------------+
-         |               |                |
-   Gaussian distance  generalized      covariance
-    (LS or MLPE)       Wishart          Wishart
-         +---------------+----------------+
-                         |
-                         v
-                   fitted model
-                   coef(), summary(), plot(), anova()
-```
+For local development with both repositories checked out side by side, install landgraph from its checkout first. The terradish CRAN release depends on that companion version being available on CRAN.
 
 ## Quick start
 
-``` r
+```r
 library(terradish)
 library(terra)
-
 data(melip)
-melip.altitude    <- terra::unwrap(melip.altitude)
-melip.forestcover <- terra::unwrap(melip.forestcover)
-melip.coords      <- terra::unwrap(melip.coords)
 
-# Scale covariates: important for numerical stability in the log-linear model
-covariates <- c(melip.altitude, melip.forestcover)
+# Unwrap the portable example data and standardize each raster layer.
+altitude <- terra::unwrap(melip.altitude)
+forestcover <- terra::unwrap(melip.forestcover)
+sites <- terra::unwrap(melip.coords)
+covariates <- c(altitude, forestcover)
 names(covariates) <- c("altitude", "forestcover")
 covariates <- scale_covariates(covariates)
+graph <- conductance_surface(covariates, sites)  # eight neighbors by default
 
-# Build the weighted graph
-surface <- conductance_surface(covariates, melip.coords, directions = 8)
-
-# Fit an IBR model
-fit <- terradish(
-  melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = mlpe
-)
-
+# MLPE accounts for shared sampling sites among pairwise genetic distances.
+fit <- terradish(melip.Fst ~ forestcover + altitude, graph,
+                 measurement_model = mlpe)
+fit$convergence
 summary(fit)
-
-# Visualize
-plot(fit, data = surface)                    # marginal associations on genetic distance (default)
-plot(fit, type = "surface", data = surface)  # fitted conductance surface + 95% CI
-plot(fit, type = "fit")                      # observed vs. fitted scatter
-plot(fit, type = "marginal", data = surface) # marginal associations on conductance
-
-# Optional: constrain predictions to focal support for unstable tails
-plot(fit, type = "marginal", data = surface,
-     support = "focal", support_probs = c(0.01, 0.99),
-     clamp_covariates = c("forestcover", "altitude"))
-cond_focal <- conductance(surface, fit,
-                          support = "focal",
-                          support_probs = c(0.01, 0.99),
-                          clamp_covariates = c("forestcover", "altitude"))
+coef(fit)
+confint(fit)
+vcov(fit)
+plot(fit, type = "surface", data = graph)
+plot(fit, type = "fit")
 ```
 
-## Selected pair analyses
+Check convergence before interpreting the surface. Code 0 meets the stopping rule; code 1 reaches the iteration limit; code 2 reports a stall or failed line search. Also inspect `fit$fit$subproblem` for nuisance optimization. Numerical convergence does not establish model adequacy.
 
-You can retain all focal sites in the conductance graph while fitting the
-measurement model to only a chosen subset of pairwise observations. This
-is useful when the sampling design, biological hypothesis, or validation
-scheme focuses on selected comparisons rather than the full pairwise
-distance matrix.
+## Interpreting estimates
 
-``` r
-selected_pairs <- rbind(
-  c(1, 2),
-  c(1, 4),
-  c(3, 5)
-)
+For a standardized linear covariate, `exp(coef(fit))` is the conductance multiplier for a one-standard-deviation increase, holding other terms fixed. A common conductance scale is absorbed by the measurement model's resistance coefficient, so absolute conductance is unidentified.
 
-pair_mlpe <- pair_subset_measurement_model(mlpe, selected_pairs)
+Gaussian `sigma` describes raster smoothing in map units. The smoothed layer is re-standardized at every candidate sigma, so its coefficient is per standard deviation of that layer. The half-cell lower bound still smooths, and the upper bound is limited by the retained kernel window. Dispersal averaging can favor positive scales without a separate ecological scale of effect. Use `gaussian_scale_summary()`, `summary(fit)$sigma_table`, and `gaussian_scale_profile()` to examine units, bounds, and uncertainty.
 
-fit_subset <- terradish(
-  melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = pair_mlpe
-)
+Spline models are unpenalized regression splines with fixed degrees of freedom. Their centered bases and knots are retained for prediction. `summary(fit)$spline_monotonicity` describes shape over the focal-site covariate range. Tails outside that range are poorly identified.
+
+| Response | Measurement model | Main requirement |
+|---|---|---|
+| Pairwise genetic distances, including ratio-estimator FST | `mlpe` or `leastsquares` | A defensible mean structure; MLPE models shared-site correlation |
+| Allele-frequency covariance | `wishart_covariance` | Coherent covariance and explicit effective information |
+| Squared distances derived from covariance | `generalized_wishart` | Admissible geometry and explicit effective information |
+
+The two Wishart forms use the same site-contrast likelihood for matching covariance and distance representations. Passing `check_distance_response()` does not give an FST ratio estimator a Wishart sampling model. Grouped covariance should use the coherent `gower` diagonal from landgraph; `within` is on a different scale. Rare-variant weighting and unequal group sizes require sensitivity checks.
+
+### What `nu` changes
+
+Wishart point estimates are invariant to rescaling `nu` at the optimum. Standard errors scale as `1 / sqrt(nu)`, while likelihood-ratio statistics and the likelihood contribution to information criteria scale with `nu`. Linkage and shared population history can make effective information much smaller than the marker count.
+
+Use `terradish_rescale_nu(fit, nu = ...)` to report conclusions over plausible values. Dividing `nu` by 20 increases standard errors by `sqrt(20)` without refitting estimates. AIC at nominal marker information can over-select environmental terms and flexible curves. Use spatial CV for predictive support and rescaling for inferential sensitivity.
+
+## Combine IBE and IBR
+
+```r
+# Raster covariates come first; coordinates come second.
+environment <- pairwise_endpoint_covariates(covariates, sites)
+lonlat <- terra::crds(terra::project(sites, "EPSG:4326"))
+local_crs <- sprintf("+proj=aeqd +lat_0=%f +lon_0=%f +datum=WGS84 +units=m",
+                     mean(lonlat[, 2]), mean(lonlat[, 1]))
+projected_sites <- terra::project(sites, local_crs)
+pairwise <- pairwise_covariates(environment,
+  geographic_100km = dist(terra::crds(projected_sites)) / 100000)
+
+joint <- terradish(melip.Fst ~ forestcover + altitude, graph,
+                   measurement_model = mlpe_covariates(pairwise))
+terradish_ibe_ratio(joint)
+
+# The same object can enter a model for a coherent covariance response.
+wishart_measurement <- wishart_covariates(pairwise, model = "wishart_covariance")
 ```
 
-The graph solve still retains all sites, but the likelihood and MLPE
-correlation structure are evaluated only for the selected pair rows.
+Geographic differences in this example are in units of 100 km. The IBE:IBR ratio expresses an environmental difference in resistance-distance units with a joint uncertainty interval. Raw coefficients are not directly comparable across families. Ratios require matching transforms and scaling and are undefined when the resistance coefficient is zero.
 
-## Measurement models
+Environmental terms can reflect assortative mating, dispersal filtering, local adaptation, or environmental patterns in site variance. Report conductance fits with and without pairwise terms because signs can change. A uniform `~ 1` surface with environmental terms represents **IBD + IBE**, not IBE alone.
 
-`terradish` provides four measurement models. The right choice depends on the form of your genetic data and how you want to handle the non-independence of pairwise observations.
+## Model comparison
 
-| Model | Input `S` | Requires `nu` | Correlation structure |
-|----|----|----|----|
-| `leastsquares` | distance matrix | no | independent errors |
-| `mlpe` | distance matrix | no | MLPE shared-site correction |
-| `generalized_wishart` | admissible squared-distance matrix | yes | generalized Wishart |
-| `wishart_covariance` | **covariance** matrix | yes | Wishart |
+`terradish_folds()` constructs folds; `terradish_cv_folds()` keeps the landscape graph fixed while withholding sites. It accepts per-formula conductance factories and repeated folds. Reprofiled nuisance parameters compare conductance formulas under one measurement model. Set `nuisance = "fixed"` to retain every measurement parameter from training and score predictive densities when comparing measurement extensions.
 
-**`leastsquares`** is the fastest and simplest model. It treats all pairwise genetic distances as independent observations and is useful for exploration and diagnostics. Because it ignores shared-site dependence, its standard errors can be too small.
+Read success counts first. Failed folds make full totals unavailable, and rankings use only folds successful for every candidate. Paired differences and their standard errors are descriptive because folds share data. Checkpoints reject incompatible input or model changes.
 
-**`mlpe`** ("maximum likelihood population effects") models the dependence that arises because every pair (A to B) and (A to C) includes site A. It is the preferred distance likelihood when a defensible effective marker count is unavailable.
+MLPE and Wishart scores do not share a common predictive scale. Within one Wishart comparison, changing `nu` rescales scores without changing ranks when the same folds succeed. Likelihood-ratio tests require nested models, matching responses and graphs, and fixed `nu`. Environmental Wishart weights need a boundary reference, not an ordinary chi-square test.
 
-**`generalized_wishart`** evaluates a generalized Wishart likelihood for an admissible squared-distance response that is coherently related to a centered positive semidefinite covariance matrix. It is not valid for an arbitrary dissimilarity matrix. Use `check_distance_response()` on the actual response before fitting. `terradish()` runs the same check automatically and stops on substantive violations rather than silently changing the response. The model also requires a supplied effective marker degrees of freedom, `nu`, which is not estimated.
+## Prediction and large landscapes
 
-**`wishart_covariance`** uses a positive semidefinite population covariance matrix, such as output from `cov_from_biallelic()`, and also requires `nu`. For biallelic SNPs, use the number of approximately independent retained SNPs. For microsatellites, use the locus count as the conservative primary value and report sensitivity to larger plausible values. Changing `nu` leaves point estimates unchanged but rescales uncertainty and likelihood-based evidence.
+New-landscape prediction reuses fitted log-linear terms, spline knots and centers, or Gaussian post-smoothing scaling. Apply stored input scaling with `scale_covariates(new_rasters, reference = original_scaled_rasters)` before building a new graph. Slim fits retain covariance and interval methods but cannot predict after their model closures are removed.
 
-See `vignette("wishart-covariance", package = "terradish")` for a covariance-based workflow that starts from raw genotype data and fits with `wishart_covariance`.
+`solver = "auto"` selects AMG above the large-graph threshold regardless of the number of right-hand sides. AMG iteration counts can increase with conductance contrast. Experimental parallel derivatives use PSOCK workers for Hessian and partial solves; AMG and cached CHOLMOD ignore `cores`.
 
-``` r
-# Standard MLPE fit
-fit_mlpe <- terradish(
-  melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = mlpe
-)
+Cropping changes resistance. One audit found increases of 15–23% with a two-cell buffer and 1–2% with ten cells. These are case-specific results: compare larger-buffer refits. Landmark and coarse-raster starts require exact refinement; `terradish_grid()` supports exact evaluation only. `terradish_assess_settings()` is a speed probe, not a convergence or statistical check.
 
-# Generalized Wishart fit: first construct an admissible squared-distance response
-# from a positive semidefinite covariance matrix. This simulated example uses
-# nu = 50 for both data generation and fitting.
-nu_gw <- 50
-sim_gw <- simulate_covariance_response(
-  theta   = c(forestcover = 0.4, altitude = -0.3),
-  formula = ~ forestcover + altitude,
-  data    = surface,
-  tau     = 0.8,
-  sigma   = 0.2,
-  nu      = nu_gw,
-  seed    = 1
-)
-gw_distance <- dist_from_cov(sim_gw$covariance)
-check_distance_response(gw_distance)  # admissible must be TRUE before fitting
-fit_gw <- terradish(
-  gw_distance ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = generalized_wishart,
-  nu                = nu_gw
-)
+## Experimental features
 
-# Do not compare fit_mlpe and fit_gw by AIC: they use different responses and
-# different likelihood families.
-# Compare candidate conductance formulas only within one family and, for Wishart
-# fits, hold nu fixed.
+Directed conductance, hierarchical fields, site-specific drift terms, pair subsets, Kron reduction, block-CG, and legacy CV remain on the `experimental` branch. Their unresolved limitations are documented in that branch's `EXPERIMENTAL.md`.
+
+```r
+remotes::install_github("wpeterman/terradish@experimental")
 ```
 
-## Conductance models
+## Changes in 1.0.0
 
-**`loglinear_conductance`** is the standard model: fitted conductance at each cell = exp(θ₁·x₁ + θ₂·x₂ + ...). A positive θ means higher covariate values are associated with higher relative conductance, conditional on the graph and other terms; a negative θ means lower relative conductance. The model supports `I(x^2)` and `x * z` interaction terms in the formula.
+- The supported core concentrates on log-linear, Gaussian, and spline conductance with MLPE and contrast Wishart likelihoods.
+- Graphs use eight directions by default. Gaussian alignment, kernel bounds, spline prediction, and environmental kernels are corrected.
+- Convergence records, covariance and interval methods, Gaussian profiles, IBE ratios, and `nu` sensitivity are available.
+- Fixed-domain CV supports per-formula factories, fixed nuisance prediction, repeated folds, failure accounting, and compatible checkpoints.
+- Stored scaling, new-landscape prediction, combined pairwise covariates, and `nu_fit` sensitivity are supported.
+- Research prototypes and unsupported solvers have moved off the supported core. See `NEWS.md` for migration details.
 
-**`smooth_loglinear_conductance`** extends the log-linear model with spline terms such as `s(altitude, df = 4)` for non-linear conductance responses.
+## Vignettes and attribution
 
-**`gaussian_smoothed_loglinear_conductance()`** jointly estimates conductance coefficients and the Gaussian smoothing scale (σ) at which each raster covariate is associated with fitted conductance. Rather than pre-smoothing rasters at fixed scales, this model optimizes σ inside the likelihood calculation using analytic gradients and BFGS. The estimate is in raster map units and is not an estimate of dispersal distance, movement distance, or home-range size.
+Start with `vignette("getting-started", package = "terradish")`. Other guides cover comparison, IBE and IBR, Wishart covariance, splines, Gaussian scales, large landscapes, and simulation design. Open the collection with `browseVignettes("terradish")`.
 
-``` r
-# Gaussian scale model: use the raw raster and retain it with saveStack = TRUE
-names(melip.forestcover) <- "forestcover"
-surface_raw <- conductance_surface(
-  melip.forestcover, 
-  melip.coords,
-  directions = 8, 
-  saveStack = TRUE
-)
+Nate Pope developed the sparse graph optimization, reverse-mode derivatives, MLPE, and generalized Wishart foundations in [radish](https://github.com/nspope/radish). terradish extends that framework with terra-native workflows and the supported features above. Selected deprecated `radish*` wrappers remain; full compatibility with every historical entry point is not promised.
 
-fit_gaussian <- terradish(
-  melip.Fst ~ forestcover,
-  data              = surface_raw,
-  conductance_model = gaussian_smoothed_loglinear_conductance(surface_raw),
-  measurement_model = mlpe,
-  optimizer         = "auto",
-  leverage          = FALSE
-)
-
-gaussian_scale_summary(fit_gaussian)   # sigma in map units, cell widths, and radii
-plot(fit_gaussian, type = "sigma")     # Gaussian kernel plot with uncertainty band
-
-# Optional coarse-raster warm start for larger rasters. With exact_refine = TRUE,
-# the reported fit is still refined on the original full-resolution graph.
-fit_gaussian_coarse <- terradish(
-  melip.Fst ~ forestcover,
-  data              = surface_raw,
-  conductance_model = gaussian_smoothed_loglinear_conductance(surface_raw),
-  measurement_model = mlpe,
-  approximation     = "coarse_raster",
-  approximation_control = list(factor = c(4, 2), exact_refine = TRUE),
-  optimizer         = "auto",
-  leverage          = FALSE
-)
-```
-
-See `vignette("spline-conductance", package = "terradish")` for spline conductance models and `vignette("gaussian-scale-optimization", package = "terradish")` for a staged workflow that fits single-raster scale-aware models, compares them to fixed-raster fits, and inspects `sigma` before adding additional landscape variables.
-
-## Working with larger rasters
-
-Large rasters are expensive because every likelihood evaluation builds or updates a sparse graph Laplacian, factorizes it, and solves for effective distances among focal sites. `terradish` includes three opt-in tools that address different parts of that cost.
-
-### Crop to the sampled landscape
-
-If your sampling sites occupy only a small part of a much larger raster, crop the raster before graph construction:
-
-``` r
-surface_cropped <- conductance_surface(
-  covariates,
-  melip.coords,
-  directions   = 8,
-  saveStack    = TRUE,
-  crop_buffer  = 0.05
-)
-```
-
-The buffer is in the raster's map units. For longitude/latitude rasters, that means degrees; for direct distance interpretation, use a projected raster. Cropping is most helpful when sites are clustered. If sites span the whole raster, there may be little or no speed gain.
-
-### Use coarse-raster warm starts
-
-Coarse-raster approximation optimizes first on one or more aggregated rasters, then optionally refines on the original graph:
-
-``` r
-fit_coarse <- terradish(
-  melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = mlpe,
-  approximation     = "coarse_raster",
-  approximation_control = list(
-    factor       = c(4, 2),
-    exact_refine = TRUE
-  )
-)
-```
-
-With `exact_refine = TRUE`, the final coefficients, likelihood, and standard errors come from the full-resolution graph. The coarse stages are only used to find a better starting point. With `exact_refine = FALSE`, the fit is faster but approximate and is best treated as a screening result.
-
-### Benchmark direct solver settings
-
-The fastest direct Cholesky factorization setting depends on graph size and the local R/BLAS build. Use `terradish_solver_benchmark()` as a quick diagnostic:
-
-``` r
-terradish_solver_benchmark(
-  surface,
-  factorization = c("simplicial_ldl", "simplicial_ll", "supernodal_ll"),
-  n_replicates = 2
-)
-```
-
-For small example rasters, timings can be noisy. This benchmark is most useful on rasters large enough that the linear solve is a visible part of runtime.
-
-### Ask terradish to assess settings
-
-`terradish_assess_settings()` combines a graph profile with short, optional probe benchmarks. It returns an advisory recommendation for the optimizer, line search, direct solver settings, and whether a coarse-raster warm start appears worthwhile:
-
-``` r
-assessment <- terradish_assess_settings(
-  melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = mlpe,
-  probe_maxit       = 2,
-  coarse_probe      = FALSE
-)
-
-assessment
-assessment$recommended
-```
-
-The assessment is intentionally conservative. It does not change defaults or refit your final model automatically; instead, inspect the recommendation and pass the suggested pieces into `terradish()` when they make sense for your analysis.
-
-## IBE and IBR joint modeling
-
-Isolation by environment (IBE) and isolation by resistance (IBR) terms can be included in one measurement model:
-
--   The **conductance side** captures IBR: raster covariates and landscape resistance distances.
--   The **measurement side** captures IBE: pairwise environmental difference covariates enter as additional predictors in the MLPE model.
-
-`pairwise_endpoint_covariates()` builds pairwise environmental difference matrices from point-level data; `mlpe_covariates()` extends the MLPE measurement model to include them.
-
-``` r
-# Pairwise environmental differences at sampling sites
-Z <- pairwise_endpoint_covariates(melip.coords, covariates)
-
-# Joint IBE + IBR model
-fit_ibe_ibr <- terradish(
-  melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = mlpe_covariates(Z)
-)
-
-summary(fit_ibe_ibr)
-```
-
-See `vignette("ibe-ibr-workflow", package = "terradish")` for a full guided walkthrough including interpretation of IBE vs. IBR coefficients and marginal-association plots.
-
-The IBE coefficients are conditional associations after the fitted resistance and shared-site dependence are included. This joint parameterization does not by itself causally separate environmental, landscape, historical, or demographic processes.
-
-## Model comparison and selection
-
-### Likelihood ratio tests
-
-``` r
-# Does adding forest cover improve this nested MLPE model?
-fit_altitude_only <- terradish(
-  melip.Fst ~ altitude,
-  data = surface, conductance_model = loglinear_conductance,
-  measurement_model = mlpe
-)
-anova(fit_full, fit_altitude_only)
-```
-
-### Information criteria
-
-`aic_table()` ranks comparable fitted models by AIC, AICc, or BIC. Every model must use the same response, focal sites, graph domain, likelihood family, and pair subset; Wishart comparisons also require the same `nu`. The function rejects known violations, but users must still verify that separately constructed graphs have the same domain.
-
-``` r
-aic_table(
-  list(fit_ibd, fit_altitude_only, fit_fc_only, fit_full),
-  mod_names = c("IBD", "Altitude", "Forest cover", "Full")
-)
-
-# AICc (recommended when sample size is small relative to parameters)
-aic_table(..., AICc = TRUE)
-
-# BIC; the sample-size convention is documented in ?aic_table
-aic_table(..., BIC = TRUE)
-```
-
-### Likelihood surface
-
-`terradish_grid()` evaluates the log-likelihood at every point on a user-specified parameter grid, which is useful for diagnosing identifiability and visualizing the shape of the likelihood surface:
-
-``` r
-theta_grid <- as.matrix(expand.grid(
-  forestcover = seq(-1, 1, length.out = 21),
-  altitude    = seq(-1, 1, length.out = 21)
-))
-
-grid_result <- terradish_grid(
-  theta             = theta_grid,
-  formula           = melip.Fst ~ forestcover + altitude,
-  data              = surface,
-  conductance_model = loglinear_conductance,
-  measurement_model = mlpe
-)
-```
-
-## Cross-validation
-
-Information criteria summarize in-sample fit under a specified likelihood. Cross-validation evaluates held-out predictive likelihood. Random site splits can leak information across spatial clusters, so use spatially structured folds when the scientific target is transfer to new regions or clusters. In every held-out evaluation, nuisance parameters are reprofiled for the test response under the fixed conductance coefficients.
-
-``` r
-# Single train/test split
-cv_result <- terradish_cv(
-  pts        = melip.coords,
-  covariates = covariates,
-  fmla       = melip.Fst ~ forestcover + altitude,
-  model      = mlpe,
-  prop_train = 2/3,
-  seed       = 42
-)
-cat("Held-out log-likelihood:", round(cv_result$cv_loglik, 2))
-
-# Repeated cross-validation across many random splits
-cv_reps <- terradish_cv_replicates(
-  pts        = melip.coords,
-  covariates = covariates,
-  fmla       = melip.Fst ~ forestcover + altitude,
-  model      = mlpe,
-  seeds      = 1:10
-)
-summary(cv_reps)
-
-# Compare two models using held-out log-likelihood
-cv_comparison <- cv_model_selection(
-  list(cv_simple, cv_full),
-  cv_names = c("Simple", "Full"),
-  aic      = TRUE
-)
-```
-
-See `vignette("model-comparison", package = "terradish")` for a detailed walkthrough of all three comparison approaches (LRT, AIC, CV).
-
-## Vignettes
-
-| Vignette | Topic |
-|----|----|
-| `vignette("getting-started", package = "terradish")` | Core workflow: fitting, interpreting, and visualizing |
-| `vignette("model-comparison", package = "terradish")` | LRT, AIC, cross-validation, likelihood surfaces |
-| `vignette("ibe-ibr-workflow", package = "terradish")` | Joint IBE + IBR fitting |
-| `vignette("wishart-covariance", package = "terradish")` | Covariance-based Wishart IBR from genotype data |
-| `vignette("spline-conductance", package = "terradish")` | Non-linear conductance responses with spline terms |
-| `vignette("gaussian-scale-optimization", package = "terradish")` | Gaussian raster-smoothing estimation |
-
-## Attribution
-
-The core optimization infrastructure in `terradish` (sparse Cholesky factorization of the graph Laplacian, reverse-mode gradient backpropagation, and the MLPE and generalized Wishart likelihood layers) was developed by **Nate Pope** as the [`radish`](https://github.com/nspope/radish) R package. `terradish` builds on that foundation while extending it with new capabilities. Full backward compatibility with `radish` entry points is maintained.
-
-Contact Bill Peterman (Peterman.73\@osu.edu) or submit an issue on GitHub for bug reports and feature requests.
-
-<p align="center"><img src="man/figures/terradish-sticker.png" alt="terradish hex sticker" height="300"/></p>
+Contact Bill Peterman (Peterman.73@osu.edu) or submit an issue on GitHub for bug reports and feature requests.

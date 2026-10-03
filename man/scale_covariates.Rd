@@ -8,7 +8,8 @@ scale_covariates(
   covariates,
   method = c("zscore", "minmax"),
   center = TRUE,
-  scale = TRUE
+  scale = TRUE,
+  reference = NULL
 )
 }
 \arguments{
@@ -28,6 +29,11 @@ standard deviation.}
 \code{TRUE} (default), divide by the layer standard deviation.  If
 \code{FALSE} with \code{center = TRUE}, layers are centered but not
 divided.}
+
+\item{reference}{A previous scaled raster or its \code{terradish_scale}
+attribute. Applies the stored centers and scales by layer name instead of
+estimating new values. When supplied, \code{method}, \code{center}, and
+\code{scale} do not change the stored transformation.}
 }
 \value{
 A \code{SpatRaster} with transformed values and a
@@ -72,6 +78,11 @@ attr(scaled_r, "terradish_scale")  # per-layer center and scale
 
 # min-max scaling to [0, 1]
 scaled_mm <- scale_covariates(r, method = "minmax")
+
+# Preserve the training transformation on new values, matched by layer name.
+new_scaled <- scale_covariates(r + 10, reference = scaled_r)
+terra::values(new_scaled)
+# Values can fall outside the training range; they are not re-centered.
 
 }
 \seealso{

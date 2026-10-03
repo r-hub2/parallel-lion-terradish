@@ -44,10 +44,11 @@ fit_gaussian <- terradish(
   measurement_model = mlpe,
   optimizer = "auto",
   leverage = FALSE,
-  control = NewtonRaphsonControl(maxit = 12, verbose = FALSE)
+  control = NewtonRaphsonControl(maxit = 100, verbose = FALSE)
 )
 
 fit_gaussian
+fit_gaussian$convergence
 
 ## ----gaussian-coarse-start, eval=FALSE----------------------------------------
 # fit_gaussian_coarse <- terradish(
@@ -62,14 +63,22 @@ fit_gaussian
 #   ),
 #   optimizer = "auto",
 #   leverage = FALSE,
-#   control = NewtonRaphsonControl(maxit = 12, verbose = FALSE)
+#   control = NewtonRaphsonControl(maxit = 100, verbose = FALSE)
 # )
 
 ## ----coef---------------------------------------------------------------------
 coef(fit_gaussian)
+summary(fit_gaussian)$sigma_table
+confint(fit_gaussian)
 
 ## ----sigma--------------------------------------------------------------------
 coef(fit_gaussian)[["sigma.forestcover"]]
+
+## ----sigma-profile, eval = FALSE----------------------------------------------
+# # Refit the other parameters at a grid of fixed forest-cover scales.
+# profile <- gaussian_scale_profile(fit_gaussian, "forestcover", n = 15)
+# profile$interval
+# confint(profile$fit)
 
 ## ----sigma-summary------------------------------------------------------------
 gaussian_scale_summary(fit_gaussian)
@@ -77,13 +86,13 @@ gaussian_scale_summary(fit_gaussian)
 ## ----sigma-plot, fig.cap = "***Fitted Gaussian kernel with uncertainty band. The dashed line marks the distance containing 90% of the one-dimensional kernel mass.***"----
 plot(fit_gaussian, type = "sigma")
 
-## ----sigma-plot-km, fig.cap = "***Fitted Gaussian kernel with x-axis relabeled in kilometers.***"----
-plot(
-  fit_gaussian,
-  type = "sigma",
-  distance_per_map_unit = 0.001,
-  distance_unit = "km"
-)
+## ----sigma-plot-km, eval = FALSE, fig.cap = "***Fitted Gaussian kernel with x-axis relabeled in kilometers.***"----
+# plot(
+#   fit_gaussian,
+#   type = "sigma",
+#   distance_per_map_unit = 0.001,
+#   distance_unit = "km"
+# )
 
 ## ----fixed-fit----------------------------------------------------------------
 fit_fixed <- terradish(
@@ -93,7 +102,7 @@ fit_fixed <- terradish(
   measurement_model = mlpe,
   optimizer = "auto",
   leverage = FALSE,
-  control = NewtonRaphsonControl(maxit = 12, verbose = FALSE)
+  control = NewtonRaphsonControl(maxit = 100, verbose = FALSE)
 )
 
 fit_fixed
@@ -103,6 +112,24 @@ aic_table(
   list(fit_gaussian, fit_fixed),
   mod_names = c("Gaussian scale-aware", "Fixed raster")
 )
+
+## ----gaussian-cv, eval = FALSE------------------------------------------------
+# # Center a local distance projection on the sampled Brazilian sites.
+# lonlat <- terra::crds(terra::project(coords, "EPSG:4326"))
+# local_crs <- sprintf("+proj=aeqd +lat_0=%f +lon_0=%f +datum=WGS84 +units=m",
+#                      mean(lonlat[, 2]), mean(lonlat[, 1]))
+# coords_projected <- terra::project(coords, local_crs)
+# folds <- terradish_folds(coords_projected, k = 2, seed = 42)
+# cv_scale <- terradish_cv_folds(
+#   data = surface,
+#   formulas = list(fixed = melip.Fst ~ forestcover,
+#                   gaussian = melip.Fst ~ forestcover),
+#   folds = folds, model = mlpe, nuisance = "fixed",
+#   conductance_model = list(fixed = loglinear_conductance,
+#                            gaussian = gaussian_model),
+#   control = NewtonRaphsonControl(maxit = 100)
+# )
+# cv_scale$summary
 
 ## ----summary------------------------------------------------------------------
 summary(fit_gaussian)
@@ -115,14 +142,14 @@ fitted_conductance
 plot(fitted_conductance[[1]], main = "Fitted conductance")
 points(coords, pch = 19, col = "red")
 
-## ----gaussian-support-clamp, eval = FALSE-------------------------------------
-# fitted_conductance_focal <- conductance(
-#   surface,
-#   fit_gaussian,
-#   support = "focal",
-#   support_probs = c(0.01, 0.99),
-#   clamp_covariates = "forestcover"
-# )
+## ----gaussian-support-clamp---------------------------------------------------
+fitted_conductance_focal <- conductance(
+  surface,
+  fit_gaussian,
+  support = "focal",
+  support_probs = c(0.01, 0.99),
+  clamp_covariates = "forestcover"
+)
 
 ## ----surface-two--------------------------------------------------------------
 covariates_two <- c(melip.altitude, melip.forestcover)
@@ -143,7 +170,7 @@ fit_gaussian_two <- terradish(
   measurement_model = mlpe,
   optimizer = "auto",
   leverage = FALSE,
-  control = NewtonRaphsonControl(maxit = 12, verbose = FALSE)
+  control = NewtonRaphsonControl(maxit = 100, verbose = FALSE)
 )
 
 fit_gaussian_two
@@ -160,11 +187,11 @@ gaussian_scale_summary(fit_gaussian_two)
 # 
 # # 2. Scale-aware conductance model: sigma is estimated, not fixed. The model
 # #    is built from the surface itself; sigma_upper bounds the search in map
-# #    units, and defaults to the retained raster extent's diagonal when left NULL.
+# #    units, and defaults to the smaller raster dimension / 6 for square cells.
 # cm <- gaussian_smoothed_loglinear_conductance(surface)
 # 
 # # 3. Fit; theta and sigma.<layer> are estimated jointly
-# fit <- terradish(melip.Fst ~ altitude, data = surface,
+# fit <- terradish(melip.Fst ~ forestcover, data = surface,
 #                  conductance_model = cm, measurement_model = mlpe)
 # 
 # # 4. Read the fitted scale. `sigma` is in map units, so reproject a
@@ -172,7 +199,7 @@ gaussian_scale_summary(fit_gaussian_two)
 # gaussian_scale_summary(fit)   # sigma + kernel-mass distances in map units
 # 
 # # 5. Sanity check against a fixed-raster fit of the same covariate
-# fit_fixed <- terradish(melip.Fst ~ altitude, data = surface,
+# fit_fixed <- terradish(melip.Fst ~ forestcover, data = surface,
 #                        conductance_model = loglinear_conductance,
 #                        measurement_model = mlpe)
 # aic_table(list(fit, fit_fixed),

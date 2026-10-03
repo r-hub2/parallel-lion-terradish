@@ -164,7 +164,11 @@ plot.terradish <- function(x,
 {
   type <- match.arg(type)
   support <- match.arg(support)
-  conductance_model <- .resolve_plot_conductance_model(x, conductance_model)
+  if (!identical(type, "fit"))
+  {
+    .terradish_require_submodels(x, paste0("plot(type = \"", type, "\")"))
+    conductance_model <- .resolve_plot_conductance_model(x, conductance_model)
+  }
   n <- as.integer(if (is.null(n))
     if (identical(type, "marginal_response")) 100L else 200L
   else
@@ -213,8 +217,15 @@ plot.radish <- function(x, ...) plot.terradish(x, ...)
 
 .resolve_plot_conductance_model <- function(fit, conductance_model)
 {
+  if (!is.null(fit$submodels$f_internal) &&
+      isTRUE(attr(fit$submodels$f_internal, "smooth_loglinear", exact = TRUE)) &&
+      (is.null(conductance_model) || identical(conductance_model, smooth_loglinear_conductance) ||
+       isTRUE(attr(conductance_model, "smooth_loglinear", exact = TRUE))))
+    return(attr(fit$submodels$f_internal, "plot_factory", exact = TRUE))
   if (!is.null(conductance_model))
     return(conductance_model)
+
+  .terradish_require_submodels(fit, "Conductance-model plotting")
 
   fitted_model <- fit$submodels$f_internal
   plot_factory <- attr(fitted_model, "plot_factory", exact = TRUE)
@@ -429,8 +440,8 @@ print.terradish_plot_list <- function(x, ...)
 
   sigma_se <- sqrt(pmax(diag(vcov_theta)[sigma_names], 0))
   z_ci <- qnorm((1 + quantile) / 2)
-  sigma_lower <- pmax(sigma_table$sigma - z_ci * sigma_se, 0)
-  sigma_upper <- sigma_table$sigma + z_ci * sigma_se
+  sigma_lower <- pmax(sigma_table$sigma - z_ci * sigma_se, sigma_table$sigma_lower)
+  sigma_upper <- pmin(sigma_table$sigma + z_ci * sigma_se, sigma_table$sigma_upper)
 
   kernel_mass <- 0.9
   z_mass <- qnorm((1 + kernel_mass) / 2)
@@ -571,7 +582,7 @@ print.terradish_plot_list <- function(x, ...)
          'supply the terradish_graph used for fitting.',
          call. = FALSE)
 
-  if (fit$fit$boundary || is.null(fit$mle$theta))
+  if (.no_structure_boundary(fit$fit) || is.null(fit$mle$theta))
     stop("Cannot plot conductance surface: no conductance parameters ",
          "estimated (IBD or boundary model).",
          call. = FALSE)
@@ -998,7 +1009,7 @@ print.terradish_plot_list <- function(x, ...)
          'supply the terradish_graph used for fitting.',
          call. = FALSE)
 
-  if (fit$fit$boundary || is.null(fit$mle$theta))
+  if (.no_structure_boundary(fit$fit) || is.null(fit$mle$theta))
     stop("Cannot plot marginal associations: no conductance parameters estimated ",
          "(IBD or boundary model).",
          call. = FALSE)

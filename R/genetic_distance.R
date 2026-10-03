@@ -11,7 +11,8 @@
 #'
 #' @param theta Conductance parameters. May be supplied as a numeric vector or
 #'   a one-row matrix. If unnamed, values are matched in the order implied by
-#'   \code{formula}.
+#'   \code{formula}. Gaussian \code{sigma.<layer>} parameters use the map
+#'   units reported by \code{coef()}; conversion to optimizer units is internal.
 #' @param formula Model formula specifying the conductance covariates. The left
 #'   hand side, if supplied, is ignored.
 #' @param data A \code{\link{conductance_surface}} object.
@@ -22,12 +23,9 @@
 #' @param sigma Nonnegative nugget variance added to the diagonal.
 #' @param nu Effective Wishart degrees of freedom: controls the amount of
 #'   sampling noise in the simulated covariance: larger \code{nu} gives tighter
-#'   draws around \code{Sigma}.  Choose a value that matches what you would use
-#'   when fitting the model to real data.  For biallelic SNP-like simulations
-#'   use the number of retained polymorphic SNPs. For microsatellite-like
-#'   panels, use the number of loci as the primary value;
-#'   \eqn{\sum_l (K_l - 1)}, where \eqn{K_l} is the number of observed alleles
-#'   at locus \eqn{l}, is a larger sensitivity value. The simulation requires
+#'   draws around \code{Sigma}. This is a model assumption, not a marker
+#'   count or an estimate of information from biological data. Examine a range
+#'   of plausible values. The simulation requires
 #'   \code{nu} to be at least the covariance-matrix dimension. See
 #'   \code{\link{wishart_covariance}} for how \code{nu} propagates into
 #'   estimation (it scales standard errors and model-selection statistics but
@@ -42,6 +40,10 @@
 #' \code{Sigma = tau * E(theta) + sigma * I} and simulates
 #' \code{S ~ Wishart(nu, Sigma) / nu}. This makes the returned covariance
 #' matrices directly compatible with \code{\link{wishart_covariance}}.
+#' These results are internal to the assumed model. Simulating and fitting
+#' at the same incorrect \code{nu} cannot reveal that error. Use
+#' \code{\link{covariance_response_power}} with different \code{nu} and
+#' \code{nu_fit} to examine its effect on coverage.
 #'
 #' @return A list containing:
 #' \item{covariance}{A covariance matrix if \code{nsim = 1}, otherwise a
@@ -123,7 +125,8 @@ simulate_covariance_response <- function(theta,
     set.seed(seed)
 
   E <- terradish_distance(
-    theta = theta,
+    theta = matrix(.conductance_model_to_internal(c(theta), conductance_model_obj),
+                   nrow = 1L, dimnames = dimnames(theta)),
     formula = model_formula,
     data = data,
     conductance_model = conductance_model,

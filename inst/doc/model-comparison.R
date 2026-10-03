@@ -6,9 +6,9 @@ knitr::opts_chunk$set(
   fig.height = 4.5,
   warning  = FALSE,
   message  = FALSE,
-  # The complete rendered vignette is built into the source tarball. Avoid
-  # repeating its long model fits on CRAN's shared check machines.
-  eval = identical(tolower(Sys.getenv("NOT_CRAN")), "true")
+  # Evaluate fits during ordinary builds so the source tarball includes
+  # the complete rendered guide and its figures.
+  eval = TRUE
 )
 
 
@@ -74,9 +74,9 @@ fit_full <- terradish(
 # rec <- assessment$recommended
 
 ## ----lrt----------------------------------------------------------------------
-# Reduced model: only altitude, no forest cover
-fit_altitude_only <- terradish(
-  melip.Fst ~ altitude,
+# Reduced model: only forest cover, no altitude
+fit_fc_only <- terradish(
+  melip.Fst ~ forestcover,
   data              = surface,
   conductance_model = loglinear_conductance,
   measurement_model = mlpe,
@@ -88,7 +88,7 @@ fit_altitude_only <- terradish(
   approximation_control = rec$approximation_control
 )
 
-anova(fit_full, fit_altitude_only)
+anova(fit_full, fit_fc_only)
 
 ## ----ibd-test-----------------------------------------------------------------
 fit_ibd <- terradish(
@@ -125,8 +125,8 @@ fit_interaction <- terradish(
 anova(fit_full, fit_interaction)
 
 ## ----fit-all-candidates-------------------------------------------------------
-fit_fc_only <- terradish(
-  melip.Fst ~ forestcover,
+fit_altitude_only <- terradish(
+  melip.Fst ~ altitude,
   data              = surface,
   conductance_model = loglinear_conductance,
   measurement_model = mlpe,
@@ -142,8 +142,15 @@ fit_fc_only <- terradish(
 aic_table(
   list(fit_ibd, fit_altitude_only, fit_fc_only, fit_full, fit_interaction),
   mod_names = c("IBD", "Altitude only", "Forestcover only",
-                "Full (A + FC)", "Interaction (A × FC)")
+                "Full (A + FC)", "Interaction (A * FC)")
 )
+
+## ----nu-sensitivity, eval = FALSE---------------------------------------------
+# # fit_wishart is a converged Wishart fit at the declared primary nu.
+# sensitivity <- lapply(c(10, 30, 100), function(value) {
+#   terradish_rescale_nu(fit_wishart, nu = value)
+# })
+# lapply(sensitivity, confint)
 
 ## ----aicc-table---------------------------------------------------------------
 aic_table(
@@ -249,68 +256,52 @@ plot(fit_full, type = "marginal", data = surface)
 #   clamp_covariates = c("altitude", "forestcover")
 # )
 
-## ----cv-single----------------------------------------------------------------
-cv_result <- terradish_cv(
-  pts       = melip.coords,
-  covariates = covariates,
-  fmla      = melip.Fst ~ forestcover + altitude,
-  model     = mlpe,
-  prop_train = 2 / 3,   # use 2/3 of sites for training
-  seed      = 42,
-  fit_full  = FALSE     # skip re-fitting on the full data (saves time)
-)
+## ----cv-spatial-folds, eval = FALSE-------------------------------------------
+# # melip.coords is geographic, so project it before measuring planar separation.
+# # Center a local distance projection on the sampled Brazilian sites.
+# lonlat <- terra::crds(terra::project(melip.coords, "EPSG:4326"))
+# local_crs <- sprintf("+proj=aeqd +lat_0=%f +lon_0=%f +datum=WGS84 +units=m",
+#                      mean(lonlat[, 2]), mean(lonlat[, 1]))
+# coords_projected <- terra::project(melip.coords, local_crs)
+# folds_spatial <- terradish_folds(
+#   coords_projected,
+#   k = 5,
+#   method = "spatial_kmeans",
+#   seed = 42
+# )
+# 
+# cv_spatial <- terradish_cv_folds(
+#   data = surface,
+#   formulas = list(
+#     "Forest cover" = melip.Fst ~ forestcover,
+#     "Forest cover + altitude" = melip.Fst ~ forestcover + altitude
+#   ),
+#   folds = folds_spatial,
+#   model = mlpe,
+#   nuisance = "fixed",
+#   keep_fits = "slim",
+#   checkpoint = file.path(tempdir(), "terradish-spatial-cv.rds")
+# )
+# 
+# cv_spatial$summary
+# cv_spatial$results
 
-cat("Held-out log-likelihood:", round(cv_result$cv_loglik, 2), "\n")
-
-## ----cv-replicates------------------------------------------------------------
-cv_reps <- terradish_cv_replicates(
-  pts        = melip.coords,
-  covariates = covariates,
-  fmla       = melip.Fst ~ forestcover + altitude,
-  model      = mlpe,
-  seeds      = 1:5,    # five random splits
-  fit_full   = FALSE,
-  keep_fits  = FALSE
-)
-
-print(cv_reps)
-summary(cv_reps)
-
-## ----cv-selection-------------------------------------------------------------
-# For speed, use a reduced control with fewer Newton iterations
-ctrl <- NewtonRaphsonControl(maxit = 10, verbose = FALSE)
-
-# Subset the raster stack for the simpler model so the example stays quiet
-# and only uses the covariate that appears in the formula.
-forestcover_only <- covariates[["forestcover"]]
-
-cv_forestcover <- terradish_cv(
-  pts = melip.coords, covariates = forestcover_only,
-  fmla = melip.Fst ~ forestcover, model = mlpe,
-  prop_train = 2 / 3, seed = 42, fit_full = TRUE, control = ctrl
-)
-
-cv_full <- terradish_cv(
-  pts = melip.coords, covariates = covariates,
-  fmla = melip.Fst ~ forestcover + altitude, model = mlpe,
-  prop_train = 2 / 3, seed = 42, fit_full = TRUE, control = ctrl
-)
-
-cv_comparison <- cv_model_selection(
-  list(
-    list(train_mod = cv_forestcover$train_mod,
-         cv_loglik = cv_forestcover$cv_loglik,
-         full_mod  = cv_forestcover$full_mod),
-    list(train_mod = cv_full$train_mod,
-         cv_loglik = cv_full$cv_loglik,
-         full_mod  = cv_full$full_mod)
-  ),
-  cv_names = c("Forest cover only", "Full (altitude + forestcover)"),
-  aic = TRUE
-)
-
-cv_comparison$loglik_tab
-cv_comparison$AIC_tab
+## ----cv-repeats, eval = FALSE-------------------------------------------------
+# folds_repeated <- lapply(c(42, 91, 137), function(seed) {
+#   terradish_folds(coords_projected, k = 5, seed = seed)
+# })
+# cv_shape <- terradish_cv_folds(
+#   data = surface,
+#   formulas = list(linear = melip.Fst ~ forestcover,
+#                   spline = melip.Fst ~ s(forestcover, df = 3)),
+#   folds = folds_repeated,
+#   model = mlpe,
+#   conductance_model = list(linear = loglinear_conductance,
+#                            spline = smooth_loglinear_conductance),
+#   nuisance = "fixed"
+# )
+# cv_shape$summary
+# cv_shape$results
 
 ## ----qref-mc, eval = FALSE----------------------------------------------------
 # library(terradish)
@@ -342,13 +333,22 @@ cv_comparison$AIC_tab
 #   AICc = TRUE
 # )                                 # small delta is a heuristic within this set
 # 
-# # 5. Predictive comparison on held-out sites. terradish_cv() refits from the
-# #    raw inputs, so it takes points and covariates rather than a fitted object.
-# cv <- terradish_cv(pts = coords, covariates = covariates,
-#                    fmla = melip.Fst ~ forestcover + altitude,
-#                    model = mlpe, prop_train = 2 / 3, seed = 42,
-#                    fit_full = FALSE)
-# cv$cv_loglik                      # higher held-out loglik predicts better
+# # 5. Fixed-domain transfer across spatial blocks. Prefer design-based blocks;
+# #    otherwise cluster projected coordinates without standardizing them.
+# # Center a local distance projection on the sampled Brazilian sites.
+# lonlat <- terra::crds(terra::project(coords, "EPSG:4326"))
+# local_crs <- sprintf("+proj=aeqd +lat_0=%f +lon_0=%f +datum=WGS84 +units=m",
+#                      mean(lonlat[, 2]), mean(lonlat[, 1]))
+# coords_projected <- terra::project(coords, local_crs)
+# folds <- terradish_folds(coords_projected, k = 5, seed = 42)
+# cv <- terradish_cv_folds(
+#   data = surface,
+#   formulas = list(full = melip.Fst ~ forestcover + altitude,
+#                   altitude = melip.Fst ~ altitude),
+#   folds = folds,
+#   model = mlpe, nuisance = "fixed"
+# )
+# cv$summary                        # paired differences on common successful folds
 # 
 # # 6. Map the surface with uncertainty
 # plot(fit_full, type = "surface", data = surface)

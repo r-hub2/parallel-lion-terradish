@@ -144,15 +144,19 @@
 
   stack <- .as_spatraster(surface$stack)
   mean_res <- mean(abs(res(stack[[1]])))
-  extent_diag <- .gaussian_scale_extent_diagonal(stack)
 
   lower_default <- mean_res / 2
-  upper_default <- max(extent_diag, lower_default * 4)
+  upper_default <- min(nrow(stack), ncol(stack)) * mean_res / 6
 
   lower <- .coerce_gaussian_scale_bound(sigma_lower, scale_vars,
                                         lower_default, "sigma_lower")
   upper <- .coerce_gaussian_scale_bound(sigma_upper, scale_vars,
                                         upper_default, "sigma_upper")
+
+  if (any(upper > upper_default))
+    warning("`sigma_upper` exceeds the three-sigma support of the truncated Gaussian kernel (",
+            signif(upper_default, 4), " map units). Large scales are truncated by the raster-sized window.",
+            call. = FALSE)
 
   if (any(lower >= upper))
     stop("Each `sigma_lower` bound must be strictly less than `sigma_upper`",
@@ -221,10 +225,10 @@
     ncol = nc,
     nrow_pad = nrow_pad,
     ncol_pad = ncol_pad,
-    i1 = floor(nr / 2) + 1L,
-    i2 = floor(nr / 2) + nr,
-    j1 = floor(nc / 2) + 1L,
-    j2 = floor(nc / 2) + nc,
+    i1 = ceiling(nr / 2),
+    i2 = ceiling(nr / 2) + nr - 1L,
+    j1 = ceiling(nc / 2),
+    j2 = ceiling(nc / 2) + nc - 1L,
     dist2 = dist2,
     rowcol = rowcol,
     na_mask = !mask,
@@ -302,7 +306,20 @@
     centered * d2scale / scale^2 +
     2 * centered * dscale^2 / scale^3
 
-  list(value = out, deriv = dout, second = d2out)
+  list(value = out, deriv = dout, second = d2out,
+       center = mu, scale = scale, dcenter = dmu, dscale = dscale,
+       d2center = d2mu, d2scale = d2scale)
+}
+
+.gaussian_reference_standardize <- function(value, reference) {
+  ref <- .gaussian_scale_standardize(reference$value, reference$deriv, reference$second)
+  x <- value$value - ref$center
+  dx <- value$deriv - ref$dcenter
+  d2x <- value$second - ref$d2center
+  list(value = x / ref$scale,
+    deriv = dx / ref$scale - x * ref$dscale / ref$scale^2,
+    second = d2x / ref$scale - 2 * dx * ref$dscale / ref$scale^2 -
+      x * ref$d2scale / ref$scale^2 + 2 * x * ref$dscale^2 / ref$scale^3)
 }
 
 .gaussian_scale_layer_values <- function(prep, sigma, standardize = TRUE)
@@ -717,7 +734,9 @@
 #'   are recycled across all scaled rasters; named vectors may be used to set
 #'   different bounds by raster name. When omitted, \code{sigma_lower} defaults
 #'   to half of the mean raster cell width and \code{sigma_upper} defaults to
-#'   the diagonal length of the retained raster extent.
+#'   one sixth of the smaller raster dimension in cells times the mean cell
+#'   width. The Gaussian kernel uses a raster-sized window; larger explicit
+#'   upper bounds issue a warning because more of the kernel is truncated.
 #' @param sigma_conversion Internal scaling applied during optimization.
 #'   \code{"cell"} (default) rescales each sigma parameter by the mean cell
 #'   width of its raster layer so optimization happens in approximate cell
@@ -730,6 +749,8 @@
 #'
 #' @details
 #' This is a scale-aware extension of \code{\link{loglinear_conductance}}.
+#' Factory settings are evaluated when the factory is created, so factories
+#' constructed in a loop retain their own raster choices and scale bounds.
 #' Given a model formula such as
 #' \code{~ altitude * forestcover + I(altitude^2)}, the fitted parameter vector
 #' contains both conductance coefficients and one natural-scale \code{sigma}
@@ -748,13 +769,30 @@
 #' map units. They are not direct estimates of dispersal distance, movement
 #' distance, home-range size, or the scale of a causal ecological process.
 #'
-#' Unlike the standard fixed-raster workflow, users generally should not call
-#' \code{\link{scale_covariates}} before fitting this model. The original raster
-#' values are needed so the Gaussian convolution can be applied at each proposed
-#' \code{sigma}. If \code{standardize = TRUE}, the smoothed raster values are
-#' centered and scaled after smoothing, which keeps conductance coefficients on
-#' a stable scale while still allowing \code{sigma} to be interpreted in map
-#' units.
+#' Unlike the standard fixed-raster workflow, pre-scaling with
+#' \code{\link{scale_covariates}} is unnecessary when
+#' \code{standardize = TRUE}: the supplied raster is smoothed at each proposed
+#' \code{sigma}, then its active-cell values are centered and scaled. Because
+#' \code{scale_covariates} applies a positive affine transformation to each
+#' layer, pre-scaling gives the same standardized smoothed values up to
+#' numerical tolerance. Supplying original values keeps the preprocessing and
+#' coefficient interpretation clear. With \code{standardize = FALSE},
+#' pre-scaling changes the covariate and coefficient units.
+#' With the default standardization, a coefficient is relative log conductance
+#' per standard deviation of the smoothed layer at the current sigma. The
+#' layer is re-standardized at every candidate sigma during fitting. The
+#' half-cell lower bound still smooths; near the upper bound, the smoothed
+#' layer acts as a broad spatial trend. Dispersal averaging can favor a positive
+#' sigma even when no separate ecological scale of effect exists.
+#'
+#' The Gaussian kernel is truncated to a raster-sized window. The default
+#' upper bound keeps approximately three sigma inside half the smaller raster
+#' dimension; increasing it cannot recover kernel mass outside that window.
+#' Inspect \code{summary(fit)$sigma_table} for bound flags and
+#' \code{\link{gaussian_scale_profile}} for profile intervals. Scale estimates
+#' do not receive z or p values because zero is outside the fitting interval.
+#' Wald intervals are truncated at the bounds; a bound-limited interval does
+#' not demonstrate a precisely identified scale.
 #'
 #' The current implementation supports numeric raster formulas built from raw
 #' raster names, interactions, and polynomial/arithmetic terms that can be
@@ -838,9 +876,18 @@ gaussian_smoothed_loglinear_conductance <- function(surface,
          call. = FALSE)
   sigma_conversion <- match.arg(sigma_conversion)
 
+  # Bind settings now; otherwise factories made in a loop can all read the
+  # loop variable's final value when they are first used.
+  force(scale_vars)
+  force(standardize)
+  force(sigma_lower)
+  force(sigma_upper)
+  force(sigma_conversion_factor)
+
   stack <- .as_spatraster(surface$stack)
   active_cells <- cellFromXY(stack[[1]], surface$vertex_coordinates)
   rowcol <- rowColFromCell(stack[[1]], active_cells)
+  reference_preps <- NULL
 
   factory <- function(formula, x)
   {
@@ -923,8 +970,13 @@ gaussian_smoothed_loglinear_conductance <- function(surface,
           scaled <- .gaussian_scale_layer_values(
             prep = layer_preps[[nm]],
             sigma = sigma_map[[nm]],
-            standardize = standardize
+            standardize = standardize && is.null(reference_preps)
           )
+          if (isTRUE(standardize) && !is.null(reference_preps)) {
+            reference <- .gaussian_scale_layer_values(reference_preps[[nm]],
+              sigma_map[[nm]], standardize = FALSE)
+            scaled <- .gaussian_reference_standardize(scaled, reference)
+          }
           base_value[[nm]] <- scaled$value
           base_deriv[[nm]] <- scaled$deriv * sigma_conversion_values[[nm]]
           base_second[[nm]] <- scaled$second * sigma_conversion_values[[nm]]^2
@@ -935,7 +987,13 @@ gaussian_smoothed_loglinear_conductance <- function(surface,
           zeros <- rep(0, length(values))
           if (isTRUE(standardize))
           {
-            centered <- .gaussian_scale_standardize(values, zeros, zeros)
+            centered <- if (is.null(reference_preps))
+              .gaussian_scale_standardize(values, zeros, zeros) else {
+                ref <- reference_preps[[nm]]$raw_active
+                .gaussian_reference_standardize(
+                  list(value = values, deriv = zeros, second = zeros),
+                  list(value = ref, deriv = rep(0, length(ref)), second = rep(0, length(ref))))
+              }
             values <- centered$value
           }
           base_value[[nm]] <- values
@@ -1141,6 +1199,18 @@ gaussian_smoothed_loglinear_conductance <- function(surface,
     stage_factory(formula, surface$x)
   }
   attr(factory, "default") <- NULL
+  attr(factory, "predict_for_surface") <- function(formula, surface, reference_model) {
+    info <- attr(reference_model, "gaussian_scale_info", exact = TRUE)
+    context <- attr(reference_model, "gaussian_scale_plot_context", exact = TRUE)
+    stage_factory <- gaussian_smoothed_loglinear_conductance(surface,
+      scale_vars = info$scale_vars, standardize = info$standardize,
+      sigma_lower = info$lower, sigma_upper = info$upper,
+      sigma_conversion = info$conversion_mode, sigma_conversion_factor = info$conversion)
+    # The newly created factory owns this environment; the fitted factory is
+    # unchanged. Reference derivatives keep scale-parameter uncertainty valid.
+    environment(stage_factory)$reference_preps <- context$layer_preps
+    stage_factory(formula, surface$x)
+  }
   attr(factory, "preferred_optimizer") <- "bfgs"
   attr(factory, "supports_partial") <- FALSE
   attr(factory, "requires_fixed_graph") <- TRUE
@@ -1172,11 +1242,18 @@ gaussian_smoothed_loglinear_conductance <- function(surface,
 #' fitting, the table also reports the internal optimization scale and its
 #' conversion factor back to map units. For each probability \code{p},
 #' \code{axis_*} gives the one-dimensional half-width
-#' \eqn{qnorm((1 + p) / 2) * sigma}, while \code{radial_*} gives the isotropic
-#' two-dimensional radius \eqn{sigma * sqrt(-2 * log(1 - p))} containing
-#' proportion \code{p} of the Gaussian kernel mass.
+#' \eqn{\sigma \Phi^{-1}((1+p)/2)}, while \code{radial_*} gives the isotropic
+#' two-dimensional radius \eqn{\sigma\sqrt{-2\log(1-p)}} containing
+#' proportion \code{p} of the Gaussian kernel mass. Here \eqn{\Phi^{-1}} is
+#' the standard normal quantile function and \eqn{\sigma} is the smoothing scale.
 #' These quantities summarize the fitted raster-smoothing kernel. They are not
 #' estimates of dispersal distance, movement distance, or home-range size.
+#' Use \code{summary(object)$sigma_table} to inspect standard errors and
+#' bound flags, and \code{confint(object)} for bound-truncated intervals;
+#' smoothing scales have no
+#' reported z or p values. Use \code{\link{gaussian_scale_profile}} when a
+#' profile interval is needed. A positive scale can reflect dispersal
+#' averaging, and even the half-cell lower bound applies some smoothing.
 #'
 #' If the retained raster is in longitude/latitude, the native-unit results are
 #' in degrees. In that case, use a projected raster for direct distance
@@ -1184,6 +1261,16 @@ gaussian_smoothed_loglinear_conductance <- function(surface,
 #' conversion if you need a quick descriptive summary.
 #'
 #' @return A data frame with one row per fitted \code{sigma} parameter.
+#'   \code{covariate} identifies the layer. \code{sigma} is its fitted map-unit
+#'   scale; \code{sigma_lower} and \code{sigma_upper} are fitting bounds.
+#'   \code{sigma_internal}, \code{sigma_conversion}, and
+#'   \code{sigma_conversion_mode} describe the optimization units.
+#'   \code{native_unit} labels map units or degrees, and
+#'   \code{sigma_cells_x}, \code{sigma_cells_y} express the scale in cell widths.
+#'   Probability-specific \code{axis_*} and \code{radial_*} columns give the
+#'   theoretical Gaussian distances described above, in native units and,
+#'   when requested, converted units. They describe the untruncated Gaussian;
+#'   retained raster windows can omit some of that mass.
 #'
 #' @examples
 #' \donttest{
@@ -1222,7 +1309,8 @@ gaussian_scale_summary <- function(object,
 {
   stopifnot(inherits(object, c("terradish", "radish")))
 
-  info <- attr(object$submodels$f, "gaussian_scale_info", exact = TRUE)
+  info <- object$gaussian_scale_info
+  if (is.null(info)) info <- attr(object$submodels$f, "gaussian_scale_info", exact = TRUE)
   if (is.null(info))
     stop("`object` was not fitted with `gaussian_smoothed_loglinear_conductance()`",
          call. = FALSE)
@@ -1259,8 +1347,8 @@ gaussian_scale_summary <- function(object,
   out <- data.frame(
     covariate = info$scale_vars,
     sigma = unname(sigma),
-    sigma_lower = unname(info$lower[sigma_names]),
-    sigma_upper = unname(info$upper[sigma_names]),
+    sigma_lower = unname(info$lower[info$scale_vars]),
+    sigma_upper = unname(info$upper[info$scale_vars]),
     sigma_internal = unname(sigma / info$conversion[info$scale_vars]),
     sigma_conversion = unname(info$conversion[info$scale_vars]),
     sigma_conversion_mode = rep(info$conversion_mode, length(sigma_names)),

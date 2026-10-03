@@ -19,13 +19,10 @@
 #'   \code{E} and should be positive (semi-)definite.
 #' @param phi Named numeric vector of nuisance parameters \code{(tau, sigma)}.
 #'   Omit to obtain least-squares starting values.
-#' @param nu Positive number.  Effective Wishart degrees of freedom for the
-#'   genetic covariance \code{S}: the number of (approximately) independent
-#'   genetic markers that went into computing \code{S}.  Must be supplied; it
-#'   is not estimated.  Pass via the \code{nu} argument of
-#'   \code{\link{terradish}}.  See the \dQuote{The role of \code{nu}} section
-#'   below; choosing \code{nu} is consequential and is explained in detail
-#'   there.
+#' @param nu One finite positive number describing effective Wishart information.
+#'   You must supply it; the fit does not estimate it. It is not the marker
+#'   count. See the effective-information section and report sensitivity across
+#'   plausible values with \code{\link{terradish_rescale_nu}}.
 #' @param gradient Logical. Compute gradient of the negative log-likelihood
 #'   with respect to \code{phi}?
 #' @param hessian Logical. Compute Hessian with respect to \code{phi}?
@@ -49,76 +46,35 @@
 #' }
 #'
 #' The fitted covariance is \eqn{\Sigma = \tau E + \exp(\sigma) I}.  The
-#' negative log-likelihood is:
+#' likelihood is evaluated on orthonormal site contrasts. Let \eqn{L} have
+#' \eqn{n-1} orthonormal columns perpendicular to the constant vector, and let
+#' \eqn{\tilde\Sigma = L^T\Sigma L} and \eqn{\tilde S = L^T S L}. The
+#' negative log-likelihood, omitting terms constant in the fitted parameters
+#' for a fixed response and supplied \eqn{\nu}, is:
 #'
-#' \deqn{-\ell = \frac{\nu}{2} \left[ \log|\Sigma| + \mathrm{tr}(\Sigma^{-1} S) \right]}
+#' \deqn{-\ell = \frac{\nu}{2} \left[ \log|\tilde\Sigma| + \mathrm{tr}(\tilde\Sigma^{-1} \tilde S) \right]}
 #'
-#' treating \code{S} as a sample covariance with \eqn{\nu} degrees of freedom
-#' (i.e. \eqn{\nu S} follows a Wishart distribution with \eqn{\nu} degrees of
-#' freedom and scale matrix \eqn{\Sigma}).
+#' The response is a sample covariance on site contrasts with effective
+#' degrees of freedom \eqn{\nu}. Adding a constant to every entry of \code{S}
+#' or centering it across sites does not change this objective. This is the
+#' same objective as \code{generalized_wishart(dist_from_cov(S))}; the nugget
+#' contributes \eqn{2\exp(\sigma)} to the expected squared distances.
 #'
-#' \strong{The role of \code{nu} (read this before choosing a value).}
-#' \code{nu} is the single most consequential setting in a covariance-based
-#' fit, yet it behaves in a way that surprises many users.  Because the entire
-#' negative log-likelihood above is multiplied by \eqn{\nu/2}, \code{nu}
-#' enters as a global multiplier of the objective surface.  This has three
-#' distinct consequences:
-#' \itemize{
-#'   \item \strong{Point estimates do not depend on \code{nu}.}  The maximizing
-#'     conductance parameters \eqn{\theta} and nuisance parameters
-#'     \eqn{(\tau, \sigma)} are invariant to \code{nu} at the exact optimum for
-#'     a fixed response and model because scaling the objective by a positive
-#'     constant does not move its optimum. Numerical optimizer tolerances can
-#'     produce negligible differences in practice.
-#'   \item \strong{Standard errors and confidence intervals scale as}
-#'     \eqn{1/\sqrt{\nu}}.  The Hessian scales with \code{nu}, so the
-#'     asymptotic covariance scales with \eqn{1/\nu}.  Doubling \code{nu}
-#'     shrinks every standard error by a factor of \eqn{\sqrt{2}}.  This is the
-#'     reflects the assumption that larger effective marker information should
-#'     yield tighter intervals.
-#'   \item \strong{Model selection and likelihood-ratio tests depend strongly
-#'     on \code{nu}.}  The log-likelihood scales linearly with \code{nu}, but
-#'     the AIC/BIC complexity penalty (and the \eqn{\chi^2} reference
-#'     distribution for an LRT) does not.  With large \code{nu} the penalty
-#'     becomes negligible and extra covariates are almost always
-#'     \dQuote{selected}; with small \code{nu} parsimony dominates.  The same
-#'     data can therefore favor a simpler or a more complex model purely
-#'     through the choice of \code{nu}.
-#' }
-#' In short, \code{nu} is an \emph{effective sample size}: it does not change
-#' what the data say about the shape of the conductance surface, but it
-#' determines how strongly the data speak.  Choosing \code{nu} requires care:
-#' \itemize{
-#'   \item \emph{Biallelic SNPs:} use the number of retained polymorphic SNPs.
-#'     Reduce for linkage disequilibrium if markers are not independent.
-#'   \item \emph{Microsatellites:} use the number of loci \eqn{L} as the
-#'     conservative default.  Allele frequencies within a locus are correlated
-#'     (they sum to a constant), so the locus is the natural unit of
-#'     information. \eqn{\sum_l (K_l - 1)}, where \eqn{K_l} is the number of
-#'     observed alleles at locus \eqn{l}, is a larger sensitivity value that
-#'     would count within-locus allele-frequency dimensions more aggressively.
-#'     Treating it as independent information can produce confidence intervals
-#'     that are too narrow and model-selection statistics that are too large.
-#'     Report the primary \code{nu} and a justified sensitivity analysis.
-#' }
+#' The former full-rank likelihood included the arbitrary site-mean direction.
+#' It has been removed because centered genetic covariance contains no
+#' information in that direction. The contrast form retains the interpretable
+#' comparisons among sites and agrees with covariance-derived distances.
 #'
-#' \strong{Typical workflow:}
-#' \enumerate{
-#'   \item Compute \code{S} from raw genotypes:
-#'     \code{S <- cov_from_genetic_data(dosage_matrix, groups = pop_vector)}.
-#'   \item Set \code{nu}: for biallelic SNPs use the retained SNP count; for
-#'     microsatellites use the number of loci as the conservative starting point.
-#'   \item Fit:
-#'     \code{terradish(S ~ ..., measurement_model = wishart_covariance, nu = nu)}.
-#' }
-#'
-#' If \code{S} has a non-positive-definite covariance (which can happen with
-#' the \code{diagonal = "within"} option of \code{cov_from_genetic_data}),
-#' inspect eigenvalues before fitting.
+#' \strong{Preparing the response.} Use a coherent covariance construction,
+#' such as \code{diagonal = "gower"} for grouped data in landgraph. A
+#' \code{"within"} diagonal is on a different scale and is unsuitable for
+#' Wishart fitting, even when the matrix happens to be positive definite.
+#' Per-locus standardization up-weights rare variants; filter by minor-allele
+#' frequency and assess sensitivity. Unequal group sizes create unequal
+#' sampling variance that a common diagonal nugget does not automatically fix.
 #'
 #' @seealso \code{\link{cov_from_genetic_data}}, \code{\link{cov_from_biallelic}},
 #'   \code{\link{generalized_wishart}}, \code{\link{wishart_covariates}},
-#'   \code{\link{wishart_drift_covariates}},
 #'   \code{\link{simulate_covariance_response}}, \code{\link{terradish}}
 #'
 #' @return When \code{phi} is missing, a list with elements \code{phi}
@@ -144,6 +100,7 @@
 #' wishart_covariance(E, S, phi = c(0.8, log(0.2)), nu = 20)
 #'
 #' @export
+#' @template wishart-nu
 wishart_covariance <- function(E, S, phi, nu,
                                gradient = TRUE,
                                hessian = TRUE,
@@ -162,11 +119,14 @@ wishart_covariance <- function(E, S, phi, nu,
 
     E <- symm(E)
     S <- symm(S)
-    I <- diag(nrow(E))
-    X <- cbind(c(E), c(I))
-    y <- c(S)
+    L <- qr.Q(qr(stats::contr.helmert(nrow(E))))
+    Ec <- crossprod(L, E %*% L)
+    Sc <- crossprod(L, S %*% L)
+    I <- diag(ncol(L))
+    X <- cbind(c(Ec), c(I))
+    y <- c(Sc)
     coef0 <- tryCatch(qr.solve(X, y),
-                      error = function(e) c(1, mean(diag(S))))
+                      error = function(e) c(1, mean(diag(Sc))))
     tau0 <- max(as.numeric(coef0[1]), 1e-6)
     sigma0 <- max(as.numeric(coef0[2]), 1e-6)
 
@@ -183,7 +143,8 @@ wishart_covariance <- function(E, S, phi, nu,
 
   if (anyNA(E) || anyNA(S) || anyNA(phi))
     stop("missing values are not supported")
-  stopifnot(nu > 0)
+  if (!is.numeric(nu) || length(nu) != 1L || !is.finite(nu) || nu <= 0)
+    stop("`nu` must be supplied as one finite positive number.", call. = FALSE)
 
   E <- symm(E)
   S <- symm(S)
@@ -197,10 +158,13 @@ wishart_covariance <- function(E, S, phi, nu,
 
   I <- diag(nrow(E))
   Sigma <- tau * E + sigma * I
-  SigmaInv <- solve(Sigma)
-  A <- SigmaInv
+  # Project out the arbitrary site mean. The lifted inverse also maps all
+  # derivatives back to the original site coordinates.
+  L <- qr.Q(qr(stats::contr.helmert(nrow(E))))
+  SigmaContrast <- crossprod(L, Sigma %*% L)
+  A <- L %*% solve(SigmaContrast, t(L))
   ASA <- A %*% S %*% A
-  objective <- nu / 2 * (as.numeric(determinant(Sigma, logarithm = TRUE)$modulus) +
+  objective <- nu / 2 * (as.numeric(determinant(SigmaContrast, logarithm = TRUE)$modulus) +
                            sum(diag(A %*% S)))
   fitted <- Sigma
 

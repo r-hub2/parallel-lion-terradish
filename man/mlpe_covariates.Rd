@@ -36,7 +36,7 @@ the optimizer fails to improve from the starting value.}
 \value{
 A function of class \code{"terradish_measurement_model"} suitable
   for use as the \code{measurement_model} argument of \code{\link{terradish}},
-  \code{\link{terradish_grid}}, and \code{\link{terradish_cv}}.
+  \code{\link{terradish_grid}}, and \code{\link{terradish_cv_folds}}.
 }
 \description{
 Creates an MLPE measurement model whose mean structure includes both an IBR
@@ -46,7 +46,7 @@ covariates (IBE terms).
 \details{
 The fitted mean structure is:
 
-\deqn{S_{ij} = \alpha + \beta R_{ij} + Z_{ij}^\top \gamma + e_{ij}}
+\deqn{S_{ij} = \alpha + \beta R_{ij} + Z_{ij}\gamma + e_{ij}}
 
 where \eqn{R_{ij}} is the resistance distance (IBR) and \eqn{Z_{ij}} is the
 row of pairwise endpoint-difference covariates for the pair \eqn{(i,j)}
@@ -69,9 +69,33 @@ by the outer loop. The actual MLPE shared-site correlation is
 When \code{x} is site-level data or the output of
 \code{pairwise_endpoint_covariates()}, the pairwise covariate matrix is
 stored as an attribute of the returned function.  This allows
-\code{\link{terradish_cv}} to rebuild the correct pairwise covariates for
+\code{\link{terradish_cv_folds}} to rebuild the correct pairwise covariates for
 each train/test split automatically.
+
+Unclassed matrices are interpreted as pairwise columns and must
+  have \eqn{n(n-1)/2} rows. Use a data frame for site-level columns, or
+  \code{\link{pairwise_endpoint_covariates}} to construct their differences.
+  \code{\link{pairwise_covariates}} combines these with other pairwise inputs.
 }
+\section{Interpreting pairwise effects}{
+
+Construct one \code{\link{pairwise_covariates}} object to use the same
+environmental transforms and geographic distances in both likelihood
+families. Their fitted conductance surfaces are conditional on these terms,
+and conductance signs can change when the mean structure changes. Report
+fits with and without pairwise effects. A uniform \code{~ 1} conductance
+model with pairwise terms represents IBD plus IBE, not IBE alone.
+
+A positive environmental coefficient means differentiation increases with
+environmental difference conditional on resistance. It does not distinguish
+assortative mating, dispersal filtering, local adaptation, or site variance
+that rises at environmental extremes. MLPE coefficients are unconstrained;
+Wishart kernel weights are nonnegative. Compare their effects in
+resistance-distance units with \code{\link{terradish_ibe_ratio}}, which
+divides by the resistance coefficient and propagates joint uncertainty.
+Ratios are undefined when that denominator is zero.
+}
+
 \examples{
 \donttest{
 library(terra)
@@ -101,5 +125,5 @@ Journal of Agricultural, Biological, and Environmental Statistics
 }
 \seealso{
 \code{\link{mlpe}}, \code{\link{pairwise_endpoint_covariates}},
-  \code{\link{terradish_cv}}
+  \code{\link{terradish_cv_folds}}
 }

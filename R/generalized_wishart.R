@@ -17,21 +17,10 @@
 #'   representation under the scaling used to construct it.
 #' @param phi Named numeric vector of nuisance parameters \code{(tau, sigma)}.
 #'   Omit to obtain default starting values \code{c(1, 0)}.
-#' @param nu Positive number.  Effective Wishart degrees of freedom for
-#'   \code{S}.  Must be supplied; it is not estimated.  Pass via the \code{nu}
-#'   argument of \code{\link{terradish}}.
-#'
-#'   \emph{For biallelic SNPs:} use the number of retained polymorphic SNPs
-#'   (reduced for linkage disequilibrium if markers are not independent).
-#'
-#'   \emph{For microsatellites:} use the number of loci as the conservative
-#'   primary value. Allele frequencies within a locus are correlated because they
-#'   sum to a constant, so individual alleles are not independent observations in the
-#'   Wishart sense. The locus count \eqn{L} is the more defensible primary
-#'   choice. \eqn{\sum_l (K_l - 1)}, where \eqn{K_l} is the number of observed
-#'   alleles at locus \eqn{l}, can be examined as a larger sensitivity value,
-#'   but it should not be described as the known effective degrees of freedom.
-#'   Report the primary value and the full sensitivity analysis.
+#' @param nu One finite positive number describing effective Wishart information.
+#'   You must supply it; the fit does not estimate it. It is not the marker
+#'   count. See the effective-information section and report sensitivity across
+#'   plausible values with \code{\link{terradish_rescale_nu}}.
 #' @param gradient Logical. Compute gradient of the negative log-likelihood
 #'   with respect to \code{phi}?
 #' @param hessian Logical. Compute Hessian with respect to \code{phi}?
@@ -64,34 +53,15 @@
 #' this function takes a \strong{squared-distance} matrix; \code{wishart_covariance}
 #' takes a \strong{covariance} matrix.  When the covariance and its implied
 #' distance representation carry the same information under the same centering,
-#' scaling, sites, and \code{nu}, the two models give likelihoods that differ
-#' only by a data-dependent constant. This equivalence does not make AIC values
-#' from arbitrary distance and covariance fits interchangeable.
+#' scaling, sites, and \code{nu}, the two functions return the same objective
+#' (up to numerical tolerance) because both use the same site-contrast
+#' likelihood and omit response-only normalizing terms. This equality does not
+#' make AIC values from arbitrary distance and covariance fits interchangeable.
 #'
-#' \strong{The role of \code{nu} (read this before choosing a value).}
-#' The generalized Wishart log-likelihood scales linearly with \code{nu}, so
-#' \code{nu} acts as an \emph{effective sample size} rather than as an ordinary
-#' model parameter:
-#' \itemize{
-#'   \item \strong{Point estimates do not depend on \code{nu}.}  The maximizing
-#'     conductance parameters \eqn{\theta} and nuisance parameters
-#'     \eqn{(\tau, \sigma)} are invariant to \code{nu}, because scaling the
-#'     objective by a positive constant does not move its optimum.
-#'   \item \strong{Standard errors scale as} \eqn{1/\sqrt{\nu}}: larger
-#'     effective degrees of freedom give tighter confidence intervals.
-#'   \item \strong{Model selection and likelihood-ratio tests depend strongly
-#'     on \code{nu}.}  Because the log-likelihood scales with \code{nu} while
-#'     the AIC/BIC penalty (and the \eqn{\chi^2} reference distribution) does
-#'     not, the same data can favor a simpler or a more complex model purely
-#'     through the choice of \code{nu}.
-#' }
-#' For biallelic SNPs, set \code{nu} to the retained polymorphic SNP count,
-#' reduced for linkage disequilibrium.  For microsatellites, use the number of
-#' loci \eqn{L} as a conservative primary value: within-locus allele frequencies
-#' are correlated, so \eqn{\sum_l (K_l - 1)} can yield over-confident inference
-#' if treated as independent information. Examine larger plausible values in a
-#' sensitivity analysis. See \code{\link{wishart_covariance}}
-#' for the same discussion in the covariance-response setting.
+#' \eqn{F_{ST}} ratio estimators do not have Wishart degrees of freedom. A
+#' passed geometry check is necessary but does not establish this sampling
+#' likelihood. Prefer covariance-derived squared distances and document the
+#' construction; use \code{\link{mlpe}} for ratio-estimator responses.
 #'
 #' The function checks \code{S} with \code{\link{check_distance_response}}
 #' before evaluating the likelihood. Substantive violations stop the fit. Tiny
@@ -104,7 +74,7 @@
 #'
 #' @seealso \code{\link{check_distance_response}},
 #'   \code{\link{wishart_covariance}}, \code{\link{wishart_covariates}},
-#'   \code{\link{wishart_drift_covariates}}, \code{\link{mlpe}},
+#'   \code{\link{mlpe}},
 #'   \code{\link{terradish}}
 #'
 #' @return When \code{phi} is missing, a list with elements \code{phi}
@@ -150,6 +120,7 @@
 #'
 #' @export
 
+#' @template wishart-nu
 generalized_wishart <- function(E, S, phi, nu, gradient = TRUE, hessian = TRUE, partial = TRUE, nonnegative = TRUE, validate = FALSE)
 {
   symm <- function(X) (X + t(X))/2
@@ -169,7 +140,8 @@ generalized_wishart <- function(E, S, phi, nu, gradient = TRUE, hessian = TRUE, 
 
   S <- .prepare_gw_response(S)
 
-  stopifnot(nu > 0)
+  if (!is.numeric(nu) || length(nu) != 1L || !is.finite(nu) || nu <= 0)
+    stop("`nu` must be supplied as one finite positive number.", call. = FALSE)
 
   names(phi) <- c("tau", "sigma")
   tau   <- phi["tau"]

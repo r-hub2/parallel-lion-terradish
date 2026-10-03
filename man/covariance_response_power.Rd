@@ -24,14 +24,15 @@ covariance_response_power(
   conductance_cor_threshold = 0.9,
   optimizer = c("auto", "newton", "bfgs"),
   control = NewtonRaphsonControl(maxit = 8, verbose = FALSE),
-  solver = c("auto", "direct", "amg", "pcg", "pcg_jacobi"),
+  solver = c("auto", "direct", "amg"),
   solver_control = NULL,
   approximation = c("none", "landmark", "coarse_raster"),
   approximation_control = NULL,
   nonnegative = TRUE,
   leverage = FALSE,
   cores = 1L,
-  verbose = FALSE
+  verbose = FALSE,
+  nu_fit = nu
 )
 }
 \arguments{
@@ -68,17 +69,12 @@ matrix during simulation.}
 \item{sigma}{Nonnegative nugget variance added to the covariance diagonal
 during simulation.}
 
-\item{nu}{Effective Wishart degrees of freedom, passed to both simulation
-and \code{\link{wishart_covariance}} fitting.  For biallelic SNPs use the
-number of retained polymorphic SNPs (reduced for linkage disequilibrium).
-For microsatellites, use the number of loci \eqn{L} as the primary value;
-\eqn{\sum_l (K_l - 1)}, where \eqn{K_l} is the number of observed alleles
-at locus \eqn{l}, is a larger sensitivity value rather than a default.
-Because \code{nu} acts as an effective sample size, it is a primary lever
-for power. Report the primary value and sensitivity analysis. See
-\code{\link{wishart_covariance}} for details on how \code{nu} scales
-inference. For simulation, \code{nu} must also be at least the largest
-assessed covariance-matrix dimension.}
+\item{nu}{Effective Wishart information used to simulate the response.
+Larger values reduce simulated sampling noise. The fitting value defaults
+to it through \code{nu_fit = nu}; neither is an estimate
+of information from real data. Report a sensitivity analysis rather than
+substituting the marker count. Simulation requires \code{nu} to be at
+least the largest assessed covariance-matrix dimension.}
 
 \item{nsim}{Number of covariance-response simulations per sampling design.}
 
@@ -103,6 +99,11 @@ recovery summary.}
 model-specific value is supplied in \code{fit_models}.}
 
 \item{verbose}{Logical; print progress messages?}
+
+\item{nu_fit}{Effective Wishart degrees of freedom used to fit each
+simulation. Defaults to the generating \code{nu}. Increasing this value
+narrows fitted intervals without adding independent information. Compare
+coverage as well as power when exploring this sensitivity.}
 }
 \value{
 An object of class \code{"terradish_covariance_power"} containing:
@@ -114,8 +115,13 @@ An object of class \code{"terradish_covariance_power"} containing:
     simulation replicate.}
   \item{\code{parameter_summary}}{Parameter-level power, bias, RMSE, and
     coverage summaries.}
-  \item{\code{settings}}{Simulation settings and true parameters.}
+  \item{\code{settings}}{Simulation settings and true parameters, including
+    \code{nu} for simulation and \code{nu_fit} for inference.}
 }
+Power and coverage are internal to the assumed response model. Matching
+simulation and fitting values cannot diagnose incorrect information in a
+real data set. Nonconverged fits count as failed fits and non-detections;
+inspect \code{fit_rate} before interpreting power or coverage.
 }
 \description{
 Runs a fast simulation study for covariance-response \code{terradish} fits.
@@ -123,6 +129,7 @@ Candidate sampling designs are created by subsetting the focal sites in an
 existing \code{\link{conductance_surface}} object, responses are generated
 with \code{\link{simulate_covariance_response}}, and one or more candidate
 conductance models are refit to each simulated covariance matrix.
+Gaussian smoothing widths are simulated and reported in map units.
 }
 \details{
 This helper avoids forward-time genetic simulation. It assumes a proposed
